@@ -1,0 +1,15 @@
+{
+    "rdbms": "postgresql",
+    "host": "127.0.0.1",
+    "port": 5432,
+    "dbname": "amr_01",
+    "schema": "amr_ros2",
+    "user": "amr",
+    "password": "1234512345",
+    "tables": [
+        "map",
+        "node",
+        "straightlink",
+        "curvelink"
+    ]
+}

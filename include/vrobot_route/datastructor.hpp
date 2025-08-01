@@ -27,6 +27,7 @@ typedef struct VNode {
 
 typedef struct VEdge {
   int                          id_;
+  std::string                  name_;
   v_node_t                     start_node_;
   v_node_t                     end_node_;
   std::vector<Eigen::Vector2d> control_points_;
@@ -42,18 +43,24 @@ inline v_edge_t create_virtual_edge(const Eigen::Vector2d &start_pose,
   v_node_t start_node, end_node;
 
   start_node.id_    = -1;
-  end_node.id_      = -2;
+  start_node.name_  = "virtual_start_node";
   start_node.pose_  = start_pose;
-  end_node.pose_    = end_pose;
   start_node.theta_ = 0.0;
-  end_node.theta_   = 0.0;
-  edge.start_node_  = start_node;
-  edge.end_node_    = end_node;
-  edge.id_          = -1;
-  edge.type_        = v_link_type_t::STRAIGHT;
-  edge.length_      = (start_pose - end_pose).norm();
-  edge.width_       = 0.5;
-  edge.max_vel_     = 0.3;
+
+  end_node.id_    = -2;
+  end_node.name_  = "virtual_end_node";
+  end_node.pose_  = end_pose;
+  end_node.theta_ = 0.0;
+
+  edge.start_node_ = start_node;
+  edge.end_node_   = end_node;
+
+  edge.id_      = -1;
+  edge.name_    = "virtual_edge";
+  edge.type_    = v_link_type_t::STRAIGHT;
+  edge.length_  = (start_pose - end_pose).norm();
+  edge.width_   = 0.5;
+  edge.max_vel_ = 0.3;
 
   return edge;
 }
@@ -181,6 +188,7 @@ private:
       adj_list_[edge.start_node_].emplace_back(edge.end_node_, edge);
     }
 
+#ifdef DEBUG
     // Log all adj_list_
     for (const auto &[node, edges] : adj_list_) {
       std::cout << "Node: " << node.id_ << std::endl;
@@ -189,6 +197,7 @@ private:
                   << std::endl;
       }
     }
+#endif
   }
 };
 

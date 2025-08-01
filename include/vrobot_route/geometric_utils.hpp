@@ -63,9 +63,9 @@ public:
    * @param maxDistance Maximum distance threshold for links
    * @return Vector of (nodeA, nodeB, distance) sorted by distance
    */
-  std::vector<std::tuple<v_node_t, v_node_t, double>>
-  get_closest_links(const Eigen::Vector2d &query_pose, int max_links,
-                    double max_distance) const;
+  std::vector<std::tuple<v_node_t, v_node_t, double>> get_closest_links(
+      const Eigen::Vector2d &query_pose, size_t max_links = 3,
+      double max_distance = std::numeric_limits<double>::infinity()) const;
 
   // ========================================================================
   // INTERNAL GEOMETRIC CALCULATIONS

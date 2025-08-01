@@ -41,7 +41,7 @@ Eigen::Vector2d GeometricUtils::get_projection_point_on_line_segment(
 
 std::vector<std::tuple<v_node_t, v_node_t, double>>
 GeometricUtils::get_closest_links(const Eigen::Vector2d &query_pose,
-                                  int max_links, double max_distance) const {
+                                  size_t max_links, double max_distance) const {
   std::vector<std::tuple<v_node_t, v_node_t, double>> closest_links;
   for (const auto &node : nodes_) {
     for (const auto &pair : adj_list_.at(node)) {
@@ -59,6 +59,11 @@ GeometricUtils::get_closest_links(const Eigen::Vector2d &query_pose,
             [](const auto &a, const auto &b) {
               return std::get<2>(a) < std::get<2>(b);
             });
+
+  if (closest_links.size() > max_links) {
+    closest_links.resize(max_links);
+  }
+
   return closest_links;
 }
 

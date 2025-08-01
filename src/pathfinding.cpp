@@ -30,8 +30,7 @@ Pathfinding::dijkstra(const v_node_t &start_node,
 
   // Priority queue for Dijkstra
   using PQItem = std::pair<double, v_node_t>;
-  auto cmp = [](const PQItem &a, const PQItem &b) { return a.first > b.first; };
-  std::priority_queue<PQItem, std::vector<PQItem>, decltype(cmp)> pq(cmp);
+  std::priority_queue<PQItem, std::vector<PQItem>, std::greater<>> pq;
   pq.emplace(0.0, start_node);
 
   while (!pq.empty()) {
@@ -57,11 +56,6 @@ Pathfinding::dijkstra(const v_node_t &start_node,
         pq.emplace(new_dist, neighbor);
       }
     }
-  }
-
-  if (node_info[target_node].predecessor) {
-    std::cout << "Predecessor: "
-              << node_info[target_node].predecessor.value().id_ << std::endl;
   }
 
   // Check if path was found

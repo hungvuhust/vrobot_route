@@ -7,6 +7,8 @@ GraphPose::PlanningResult
 GraphPose::planPath(const Eigen::Vector2d &startPose,
                     const v_node_t        &targetNode,
                     const PlanningConfig  &config) const {
+  std::cout << "Plan path from (" << startPose.transpose() << ") to "
+            << targetNode.id_ << std::endl;
   PlanningResult result;
 
   if (!Base::has_node(targetNode)) {
@@ -97,6 +99,12 @@ vrobot_local_planner::msg::Path GraphPose::planningResultToVPath(
   }
 
   return this->toVPath(result.pathSegments, frameId, timestamp, resolution);
+}
+
+vrobot_local_planner::msg::Path GraphPose::pathSegmentsToVPath(
+    const std::vector<PathSegment> &pathSegments, const std::string &frameId,
+    const rclcpp::Time &timestamp, double resolution) const {
+  return this->toVPath(pathSegments, frameId, timestamp, resolution);
 }
 
 } // namespace vrobot_route

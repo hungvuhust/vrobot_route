@@ -15,14 +15,13 @@ int main(int argc, char *argv[]) {
 
   std::vector<vrobot_route::v_node_t>             vnodes;
   std::unordered_map<int, vrobot_route::v_node_t> vnodes_map;
+  std::cout << "Nodes: " << nodes.size() << std::endl;
   for (const auto &node : nodes) {
     vrobot_route::v_node_t vnode;
     vnode.id_    = node.getValueOfId();
     vnode.pose_  = Eigen::Vector2d(node.getValueOfX(), node.getValueOfY());
     vnode.theta_ = node.getValueOfTheta();
 
-    std::cout << "Node: " << vnode.id_ << " Pose: " << vnode.pose_.transpose()
-              << " Theta: " << vnode.theta_ << std::endl;
     vnodes.push_back(vnode);
     vnodes_map[vnode.id_] = vnode;
   }
@@ -42,12 +41,6 @@ int main(int argc, char *argv[]) {
     vedge.width_   = 0.5;
     vedge.max_vel_ = straightlink.getValueOfMaxVelocity();
 
-    std::cout << "Edge: " << vedge.id_ << "\t"
-              << "Start: " << vedge.start_node_.id_ << "\t"
-              << "End: " << vedge.end_node_.id_ << "\t"
-              << "Length: " << vedge.length_ << "\t"
-              << "Width: " << vedge.width_ << "\t"
-              << "Max Vel: " << vedge.max_vel_ << std::endl;
     vedges.push_back(vedge);
   }
 
@@ -62,9 +55,12 @@ int main(int argc, char *argv[]) {
 
   if (path.totalDistance.has_value()) {
     for (const auto &segment : path.pathSegments) {
-      std::cout << "Segment: " << segment.id_ << std::endl;
+      std::cout << "\t- Segment: " << segment.id_ << "\t"
+                << "Start: " << segment.start_node_.id_ << "\t"
+                << "End: " << segment.end_node_.id_ << "\t"
+                << "Length: " << segment.length_ << std::endl;
     }
-    std::cout << "Distance: " << path.totalDistance.value() << std::endl;
+    std::cout << "\t- Distance: " << path.totalDistance.value() << std::endl;
   } else {
     std::cout << "No path found!" << std::endl;
   }

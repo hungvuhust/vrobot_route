@@ -33,7 +33,9 @@ public:
    */
   std::pair<std::vector<PathSegment>, std::optional<double>>
   dijkstra_from_pose(const Eigen::Vector2d &start_pose,
-                     const v_node_t &target_node, double max_distance_to_graph) const;
+                     const v_node_t        &target_node,
+                     double                 max_distance_to_graph =
+                         std::numeric_limits<double>::infinity()) const;
 
   /**
    * @brief Find path between two arbitrary poses
@@ -44,9 +46,10 @@ public:
    * @return Pair of (path_segments, total_distance)
    */
   std::pair<std::vector<PathSegment>, std::optional<double>>
-  dijkstra_pose_to_pose(
-      const Eigen::Vector2d &start_pose, const Eigen::Vector2d &target_pose,
-      double maxDistanceToGraph = std::numeric_limits<double>::infinity()) const;
+  dijkstra_pose_to_pose(const Eigen::Vector2d &start_pose,
+                        const Eigen::Vector2d &target_pose,
+                        double                 maxDistanceToGraph =
+                            std::numeric_limits<double>::infinity()) const;
 
 protected:
   // ========================================================================
@@ -58,7 +61,8 @@ protected:
    * @param pathSegments Vector of path segments
    * @return Total distance
    */
-  double calculate_path_distance(const std::vector<PathSegment> &path_segments) const;
+  double
+  calculate_path_distance(const std::vector<PathSegment> &path_segments) const;
 
   /**
    * @brief Check if path is valid (all segments connected)

@@ -87,6 +87,17 @@ public:
   vrobot_local_planner::msg::Path planningResultToVPath(
       const PlanningResult &result, const std::string &frameId,
       const rclcpp::Time &timestamp, double resolution = 0.01) const;
+
+  /**
+   * @brief Convert path segments to velocity path segments using edge
+   * velocities
+   * @param pathSegments Vector of path segments
+   * @return Vector of velocity path segments
+   */
+  vrobot_local_planner::msg::Path
+  pathSegmentsToVPath(const std::vector<PathSegment> &pathSegments,
+                      const std::string &frameId, const rclcpp::Time &timestamp,
+                      double resolution = 0.01) const;
 };
 
 } // namespace vrobot_route

@@ -20,14 +20,14 @@ public:
    * @param queryPose Query pose
    * @return NodeID of nearest node
    */
-  v_node_t get_nearest_node(const Eigen::Vector2d &query_pose);
+  v_node_t get_nearest_node(const Eigen::Vector2d &query_pose) const;
 
   /**
    * @brief Get distance to closest node
    * @param queryPose Query pose
    * @return Distance to nearest node
    */
-  double get_distance_to_nearest_node(const Eigen::Vector2d &query_pose);
+  double get_distance_to_nearest_node(const Eigen::Vector2d &query_pose) const;
 
   // ========================================================================
   // LINK GEOMETRY OPERATIONS
@@ -42,7 +42,7 @@ public:
    */
   double get_distance_to_line_segment(const Eigen::Vector2d &query_pose,
                                       const v_node_t        &nodeA,
-                                      const v_node_t        &nodeB);
+                                      const v_node_t        &nodeB) const;
 
   /**
    * @brief Find projection point of pose onto line segment
@@ -54,7 +54,7 @@ public:
   Eigen::Vector2d
   get_projection_point_on_line_segment(const Eigen::Vector2d &query_pose,
                                        const v_node_t        &nodeA,
-                                       const v_node_t        &nodeB);
+                                       const v_node_t        &nodeB) const;
 
   /**
    * @brief Find closest links to given pose with distance filtering
@@ -65,7 +65,7 @@ public:
    */
   std::vector<std::tuple<v_node_t, v_node_t, double>>
   get_closest_links(const Eigen::Vector2d &query_pose, int max_links,
-                    double max_distance);
+                    double max_distance) const;
 
   // ========================================================================
   // INTERNAL GEOMETRIC CALCULATIONS
@@ -80,7 +80,7 @@ public:
    */
   double get_distance_to_line_segment(const Eigen::Vector2d &point,
                                       const Eigen::Vector2d &line_start,
-                                      const Eigen::Vector2d &line_end);
+                                      const Eigen::Vector2d &line_end) const;
 
   /**
    * @brief Calculate projection of point onto line segment
@@ -92,6 +92,6 @@ public:
   Eigen::Vector2d
   get_projection_point_on_line_segment(const Eigen::Vector2d &point,
                                        const Eigen::Vector2d &line_start,
-                                       const Eigen::Vector2d &line_end);
+                                       const Eigen::Vector2d &line_end) const;
 };
 } // namespace vrobot_route

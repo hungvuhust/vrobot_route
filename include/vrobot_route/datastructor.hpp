@@ -36,6 +36,28 @@ typedef struct VEdge {
   double                       max_vel_;
 } v_edge_t;
 
+inline v_edge_t create_virtual_edge(const Eigen::Vector2d &start_pose,
+                                    const Eigen::Vector2d &end_pose) {
+  v_edge_t edge;
+  v_node_t start_node, end_node;
+
+  start_node.id_    = -1;
+  end_node.id_      = -2;
+  start_node.pose_  = start_pose;
+  end_node.pose_    = end_pose;
+  start_node.theta_ = 0.0;
+  end_node.theta_   = 0.0;
+  edge.start_node_  = start_node;
+  edge.end_node_    = end_node;
+  edge.id_          = -1;
+  edge.type_        = v_link_type_t::STRAIGHT;
+  edge.length_      = (start_pose - end_pose).norm();
+  edge.width_       = 0.5;
+  edge.max_vel_     = 0.3;
+
+  return edge;
+}
+
 // Hash function for VNode
 struct VNodeHash {
   std::size_t operator()(const v_node_t &node) const {
@@ -56,7 +78,7 @@ struct VGraph {
 
   std::vector<v_node_t>                                       nodes_;
   std::vector<v_edge_t>                                       edges_;
-  std::unordered_map<v_node_t, std::vector<VPair>, VEdgeHash> adj_list_;
+  std::unordered_map<v_node_t, std::vector<VPair>, VNodeHash> adj_list_;
 
   VGraph()                          = default;
   VGraph(const VGraph &)            = default;
@@ -157,6 +179,15 @@ private:
     }
     for (const auto &edge : edges) {
       adj_list_[edge.start_node_].emplace_back(edge.end_node_, edge);
+    }
+
+    // Log all adj_list_
+    for (const auto &[node, edges] : adj_list_) {
+      std::cout << "Node: " << node.id_ << std::endl;
+      for (const auto &[neighbor, edge] : edges) {
+        std::cout << "  Neighbor: " << neighbor.id_ << "----" << edge.id_
+                  << std::endl;
+      }
     }
   }
 };

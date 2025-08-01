@@ -21,6 +21,7 @@ set(THIS_PACKAGE_DEPENDENCIES
   nav_msgs
   tf2_ros
   tf2_geometry_msgs
+  vrobot_local_planner
 )
 
 foreach(DEPENDENCY ${THIS_PACKAGE_DEPENDENCIES})
@@ -50,6 +51,8 @@ add_library(vrobot_route_lib SHARED
   src/db_client.cpp
   src/geometric_utils.cpp
   src/pathfinding.cpp
+  src/graph_pose.cpp
+  src/link_based_planner.cpp
 )
 target_include_directories(vrobot_route_lib 
   PUBLIC

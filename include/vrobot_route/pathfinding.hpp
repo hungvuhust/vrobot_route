@@ -21,7 +21,7 @@ public:
    * @return Pair of (path_segments, total_distance)
    */
   std::pair<std::vector<PathSegment>, std::optional<double>>
-  dijkstra(const v_node_t &start_node, const v_node_t &target_node);
+  dijkstra(const v_node_t &start_node, const v_node_t &target_node) const;
 
   /**
    * @brief Find path from arbitrary pose to target node
@@ -33,7 +33,7 @@ public:
    */
   std::pair<std::vector<PathSegment>, std::optional<double>>
   dijkstra_from_pose(const Eigen::Vector2d &start_pose,
-                     const v_node_t &target_node, double max_distance_to_graph);
+                     const v_node_t &target_node, double max_distance_to_graph) const;
 
   /**
    * @brief Find path between two arbitrary poses
@@ -46,7 +46,7 @@ public:
   std::pair<std::vector<PathSegment>, std::optional<double>>
   dijkstra_pose_to_pose(
       const Eigen::Vector2d &start_pose, const Eigen::Vector2d &target_pose,
-      double maxDistanceToGraph = std::numeric_limits<double>::infinity());
+      double maxDistanceToGraph = std::numeric_limits<double>::infinity()) const;
 
 protected:
   // ========================================================================
@@ -58,14 +58,14 @@ protected:
    * @param pathSegments Vector of path segments
    * @return Total distance
    */
-  double calculate_path_distance(const std::vector<PathSegment> &path_segments);
+  double calculate_path_distance(const std::vector<PathSegment> &path_segments) const;
 
   /**
    * @brief Check if path is valid (all segments connected)
    * @param pathSegments Vector of path segments
    * @return True if path is valid
    */
-  bool is_valid_path(const std::vector<PathSegment> &path_segments);
+  bool is_valid_path(const std::vector<PathSegment> &path_segments) const;
 };
 
 } // namespace vrobot_route

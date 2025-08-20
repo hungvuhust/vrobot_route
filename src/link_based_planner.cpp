@@ -3,12 +3,14 @@
 
 namespace vrobot_route {
 
-std::pair<std::vector<v_edge_t>, std::optional<double>>
-LinkBasedPlanner::dijkstra_with_modular_link_approach(
-    const Eigen::Vector2d &startPose, const v_node_t &targetNode,
-    double directThreshold, size_t maxLinks, double linkDistanceWeight,
-    double maxLinkDistance, double graphDistanceWeight) const {
-
+std::pair<std::vector<v_edge_t>, std::optional<double>> LinkBasedPlanner::
+  dijkstra_with_modular_link_approach(const Eigen::Vector2d &startPose,
+                                      const v_node_t        &targetNode,
+                                      double                 directThreshold,
+                                      size_t                 maxLinks,
+                                      double                 linkDistanceWeight,
+                                      double                 maxLinkDistance,
+                                      double graphDistanceWeight) const {
   if (!Base::has_node(targetNode)) {
     return {{}, std::nullopt};
   }
@@ -19,15 +21,21 @@ LinkBasedPlanner::dijkstra_with_modular_link_approach(
   double directDistance = (startPose - targetPose).norm();
   if (directDistance <= directThreshold) {
     std::vector<v_edge_t> directPath = {
-        create_virtual_edge(startPose, targetPose)};
+      create_virtual_edge(startPose, targetPose)};
     return {directPath, directDistance};
   }
 
   // Step 1: Find closest links with distance filtering
   auto closestLinks =
-      Base::get_closest_links(startPose, maxLinks, maxLinkDistance);
+    Base::get_closest_links(startPose, maxLinks, maxLinkDistance);
   if (closestLinks.empty()) {
     return Base::dijkstra_from_pose(startPose, targetNode, maxLinkDistance);
+  }
+
+  std::cout << "Closest links: " << closestLinks.size() << std::endl;
+  for (const auto &[linkStart, linkEnd, linkDistance] : closestLinks) {
+    std::cout << "Link: " << linkStart.id_ << " -> " << linkEnd.id_
+              << " (Distance: " << linkDistance << ")" << std::endl;
   }
 
   // Step 2: Evaluate each link using weighted scoring
@@ -42,23 +50,24 @@ LinkBasedPlanner::dijkstra_with_modular_link_approach(
     }
 
     // Calculate weighted score
-    double score =
-        this->calculate_weighted_score(linkDistance, *linkToTargetDist,
-                                       linkDistanceWeight, graphDistanceWeight);
+    double score = this->calculate_weighted_score(linkDistance,
+                                                  *linkToTargetDist,
+                                                  linkDistanceWeight,
+                                                  graphDistanceWeight);
 
     if (!bestScore || score < *bestScore) {
       // Step 3: Build complete path
       Eigen::Vector2d projectionPoint =
-          Base::get_projection_point_on_line_segment(startPose, linkStart,
-                                                     linkEnd);
+        Base::get_smart_projection_point(startPose, linkStart, linkEnd);
       const Eigen::Vector2d &linkEndPose = Base::get_pose(linkEnd);
 
       std::vector<PathSegment> candidatePath;
       candidatePath.emplace_back(
-          create_virtual_edge(startPose, projectionPoint));
+        create_virtual_edge(startPose, projectionPoint));
       candidatePath.emplace_back(
-          create_virtual_edge(projectionPoint, linkEndPose));
-      candidatePath.insert(candidatePath.end(), linkToTarget.begin(),
+        create_virtual_edge(projectionPoint, linkEndPose));
+      candidatePath.insert(candidatePath.end(),
+                           linkToTarget.begin(),
                            linkToTarget.end());
 
       bestPath  = candidatePath;
@@ -75,12 +84,12 @@ LinkBasedPlanner::dijkstra_with_modular_link_approach(
   return {*bestPath, totalDistance};
 }
 
-std::pair<std::vector<v_edge_t>, std::optional<double>>
-LinkBasedPlanner::dijkstra_with_link_access(const Eigen::Vector2d &startPose,
-                                            const v_node_t        &targetNode,
-                                            double distanceThreshold,
-                                            size_t maxLinks,
-                                            double linkDistanceWeight) const {
+std::pair<std::vector<v_edge_t>, std::optional<double>> LinkBasedPlanner::
+  dijkstra_with_link_access(const Eigen::Vector2d &startPose,
+                            const v_node_t        &targetNode,
+                            double                 distanceThreshold,
+                            size_t                 maxLinks,
+                            double                 linkDistanceWeight) const {
   if (!Base::has_node(targetNode)) {
     return {{}, std::nullopt};
   }
@@ -93,14 +102,13 @@ LinkBasedPlanner::dijkstra_with_link_access(const Eigen::Vector2d &startPose,
 
   // Use link-based approach for distant poses
   return dijkstra_with_modular_link_approach(
-      startPose, targetNode, distanceThreshold, maxLinks, linkDistanceWeight);
+    startPose, targetNode, distanceThreshold, maxLinks, linkDistanceWeight);
 }
 
-std::pair<std::vector<v_edge_t>, std::optional<double>>
-LinkBasedPlanner::dijkstra_with_simple_link_access(
-    const Eigen::Vector2d &startPose, const v_node_t &targetNode,
-    size_t maxLinks) const {
-
+std::pair<std::vector<v_edge_t>, std::optional<double>> LinkBasedPlanner::
+  dijkstra_with_simple_link_access(const Eigen::Vector2d &startPose,
+                                   const v_node_t        &targetNode,
+                                   size_t                 maxLinks) const {
   if (!Base::has_node(targetNode)) {
     return {{}, std::nullopt};
   }
@@ -115,10 +123,9 @@ LinkBasedPlanner::dijkstra_with_simple_link_access(
   std::optional<double>                   bestDistance;
 
   for (const auto &[linkStart, linkEnd, linkDistance] : closestLinks) {
-    // Project onto link
+    // Project onto link - sử dụng smart projection cho cả đường thẳng và cong
     Eigen::Vector2d projectionPoint =
-        Base::get_projection_point_on_line_segment(startPose, linkStart,
-                                                   linkEnd);
+      Base::get_smart_projection_point(startPose, linkStart, linkEnd);
 
     // Find closer node on the link
     const Eigen::Vector2d &startNodePose = Base::get_pose(linkStart);
@@ -126,12 +133,12 @@ LinkBasedPlanner::dijkstra_with_simple_link_access(
 
     v_node_t accessNode = ((projectionPoint - startNodePose).norm() <
                            (projectionPoint - endNodePose).norm())
-                              ? linkStart
-                              : linkEnd;
+                            ? linkStart
+                            : linkEnd;
 
     // Path from access node to target
     auto [nodeToTarget, nodeToTargetDist] =
-        Base::dijkstra(accessNode, targetNode);
+      Base::dijkstra(accessNode, targetNode);
     if (!nodeToTargetDist) {
       continue;
     }
@@ -140,9 +147,10 @@ LinkBasedPlanner::dijkstra_with_simple_link_access(
     std::vector<PathSegment> candidatePath;
     candidatePath.emplace_back(create_virtual_edge(startPose, projectionPoint));
     candidatePath.emplace_back(
-        create_virtual_edge(projectionPoint, Base::get_pose(accessNode)));
+      create_virtual_edge(projectionPoint, Base::get_pose(accessNode)));
 
-    candidatePath.insert(candidatePath.end(), nodeToTarget.begin(),
+    candidatePath.insert(candidatePath.end(),
+                         nodeToTarget.begin(),
                          nodeToTarget.end());
 
     double totalDistance = Base::calculate_path_distance(candidatePath);
@@ -160,10 +168,10 @@ LinkBasedPlanner::dijkstra_with_simple_link_access(
   return {*bestPath, *bestDistance};
 }
 
-std::pair<std::vector<v_edge_t>, std::optional<double>>
-LinkBasedPlanner::dijkstra_with_link_following(const Eigen::Vector2d &startPose,
-                                               const v_node_t &targetNode,
-                                               size_t          maxLinks) const {
+std::pair<std::vector<v_edge_t>, std::optional<double>> LinkBasedPlanner::
+  dijkstra_with_link_following(const Eigen::Vector2d &startPose,
+                               const v_node_t        &targetNode,
+                               size_t                 maxLinks) const {
   if (!Base::has_node(targetNode)) {
     return {{}, std::nullopt};
   }
@@ -179,9 +187,9 @@ LinkBasedPlanner::dijkstra_with_link_following(const Eigen::Vector2d &startPose,
   for (const auto &[linkStart, linkEnd, linkDistance] : closestLinks) {
     // Try both directions on the link
     auto result1 =
-        build_path_through_link(startPose, linkStart, linkEnd, targetNode);
+      build_path_through_link(startPose, linkStart, linkEnd, targetNode);
     auto result2 =
-        build_path_through_link(startPose, linkEnd, linkStart, targetNode);
+      build_path_through_link(startPose, linkEnd, linkStart, targetNode);
 
     for (const auto &[path, distance] : {result1, result2}) {
       if (distance && (!bestDistance || *distance < *bestDistance)) {
@@ -198,10 +206,11 @@ LinkBasedPlanner::dijkstra_with_link_following(const Eigen::Vector2d &startPose,
   return {*bestPath, *bestDistance};
 }
 
-std::pair<std::vector<v_edge_t>, std::optional<double>>
-LinkBasedPlanner::dijkstra_with_smart_link_following(
-    const Eigen::Vector2d &startPose, const v_node_t &targetNode,
-    size_t maxLinks, double adaptiveWeight) const {
+std::pair<std::vector<v_edge_t>, std::optional<double>> LinkBasedPlanner::
+  dijkstra_with_smart_link_following(const Eigen::Vector2d &startPose,
+                                     const v_node_t        &targetNode,
+                                     size_t                 maxLinks,
+                                     double adaptiveWeight) const {
   if (!Base::has_node(targetNode)) {
     return {{}, std::nullopt};
   }
@@ -216,7 +225,7 @@ LinkBasedPlanner::dijkstra_with_smart_link_following(
 
   for (const auto &[linkStart, linkEnd, linkDistance] : closestLinks) {
     auto [path, distance] =
-        build_path_through_link(startPose, linkStart, linkEnd, targetNode);
+      build_path_through_link(startPose, linkStart, linkEnd, targetNode);
     if (!distance)
       continue;
 
@@ -237,33 +246,34 @@ LinkBasedPlanner::dijkstra_with_smart_link_following(
   return {*bestPath, totalDistance};
 }
 
-std::pair<std::vector<v_edge_t>, std::optional<double>>
-LinkBasedPlanner::build_path_through_link(const Eigen::Vector2d &startPose,
-                                          const v_node_t        &linkStart,
-                                          const v_node_t        &linkEnd,
-                                          const v_node_t &targetNode) const {
+std::pair<std::vector<v_edge_t>, std::optional<double>> LinkBasedPlanner::
+  build_path_through_link(const Eigen::Vector2d &startPose,
+                          const v_node_t        &linkStart,
+                          const v_node_t        &linkEnd,
+                          const v_node_t        &targetNode) const {
   // Path from exit node to target
   auto [exitToTarget, exitToTargetDist] = Base::dijkstra(linkEnd, targetNode);
   if (!exitToTargetDist) {
     return {{}, std::nullopt};
   }
 
-  // Build complete path
+  // Build complete path - sử dụng smart projection cho cả đường thẳng và cong
   Eigen::Vector2d projectionPoint =
-      Base::get_projection_point_on_line_segment(startPose, linkStart, linkEnd);
+    Base::get_smart_projection_point(startPose, linkStart, linkEnd);
   const Eigen::Vector2d &accessPose = Base::get_pose(linkStart);
   const Eigen::Vector2d &exitPose   = Base::get_pose(linkEnd);
 
   std::vector<v_edge_t> completePath = {
-      create_virtual_edge(startPose, projectionPoint),  // Approach to link
-      create_virtual_edge(projectionPoint, accessPose), // Move to link start
-      create_virtual_edge(accessPose, exitPose),        // Follow link topology
+    create_virtual_edge(startPose, projectionPoint),   // Approach to link
+    create_virtual_edge(projectionPoint, accessPose),  // Move to link start
+    create_virtual_edge(accessPose, exitPose),         // Follow link topology
   };
-  completePath.insert(completePath.end(), exitToTarget.begin(),
+  completePath.insert(completePath.end(),
+                      exitToTarget.begin(),
                       exitToTarget.end());
 
   double totalDistance = Base::calculate_path_distance(completePath);
   return {completePath, totalDistance};
 }
 
-} // namespace vrobot_route
+}  // namespace vrobot_route

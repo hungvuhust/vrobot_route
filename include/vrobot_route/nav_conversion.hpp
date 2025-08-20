@@ -6,11 +6,16 @@
 #include <nav_msgs/msg/path.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <visualization_msgs/msg/detail/marker__struct.hpp>
 #include <vrobot_local_planner/msg/path.hpp>
 #include <vrobot_local_planner/msg/planner_pose.hpp>
 #include <vrobot_route/datastructor.hpp>
 #include "vrobot_route/benzier.hpp"
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
+using visualization_msgs::msg::Marker;
+using visualization_msgs::msg::MarkerArray;
 namespace vrobot_route {
 
 class NavConversion : public virtual VGraph {
@@ -76,14 +81,19 @@ public:
                        pathSegment.end_node_.pose_.y())});
 
       for (double t = 0.0; t <= 1.0; t += 0.01) {
-        bezier::Point point = bezierCurve.valueAt(t);
-        interpolatedPoses.emplace_back(point.x, point.y, 0.0);
-      }
+        // Nếu điểm gần cuối thì không tính theta
+        if (t >= 0.99) {
+          interpolatedPoses.emplace_back(pathSegment.end_node_.pose_.x(),
+                                         pathSegment.end_node_.pose_.y(),
+                                         pathSegment.end_node_.theta_);
+          break;
+        }
+        bezier::Point point     = bezierCurve.valueAt(t);
+        bezier::Point nextPoint = bezierCurve.valueAt(t + 0.01);
+        double theta = std::atan2(nextPoint.y - point.y, nextPoint.x - point.x);
 
-      // Add ending pose
-      interpolatedPoses.emplace_back(pathSegment.end_node_.pose_.x(),
-                                     pathSegment.end_node_.pose_.y(),
-                                     pathSegment.end_node_.theta_);
+        interpolatedPoses.emplace_back(point.x, point.y, theta);
+      }
     }
 
     return interpolatedPoses;
@@ -139,6 +149,162 @@ public:
     }
 
     return path;
+  }
+
+  // Visualization Graph
+  inline MarkerArray visualizeGraph(const std::string  &frameId,
+                                    const rclcpp::Time &timestamp,
+                                    double              nodeScale,
+                                    double              edgeScale,
+                                    bool                showNodeLabels,
+                                    bool showLinkDirections) const {
+    visualization_msgs::msg::MarkerArray markerArray;
+
+    if (Base::adj_list_.empty()) {
+      return markerArray;
+    }
+
+    // Create node markers
+    visualization_msgs::msg::Marker nodeMarker;
+    nodeMarker.header.frame_id = frameId;
+    nodeMarker.header.stamp    = timestamp;
+    nodeMarker.ns              = "graph_nodes";
+    nodeMarker.id              = 0;
+    nodeMarker.type            = visualization_msgs::msg::Marker::SPHERE_LIST;
+    nodeMarker.action          = visualization_msgs::msg::Marker::ADD;
+    nodeMarker.scale.x         = nodeScale;
+    nodeMarker.scale.y         = nodeScale;
+    nodeMarker.scale.z         = nodeScale;
+    nodeMarker.color.r         = 0.0;
+    nodeMarker.color.g         = 1.0;
+    nodeMarker.color.b         = 0.0;
+    nodeMarker.color.a         = 1.0;
+
+    // Add node positions
+    for (const auto &node : Base::nodes_) {
+      geometry_msgs::msg::Point point;
+      point.x = node.pose_.x();
+      point.y = node.pose_.y();
+      point.z = 0.0;
+      nodeMarker.points.push_back(point);
+    }
+    markerArray.markers.push_back(nodeMarker);
+
+    // Create edge markers
+    visualization_msgs::msg::Marker edgeMarker;
+    edgeMarker.header.frame_id = frameId;
+    edgeMarker.header.stamp    = timestamp;
+    edgeMarker.ns              = "graph_edges";
+    edgeMarker.id              = 1;
+    edgeMarker.type            = visualization_msgs::msg::Marker::LINE_LIST;
+    edgeMarker.action          = visualization_msgs::msg::Marker::ADD;
+    edgeMarker.scale.x         = edgeScale;
+    edgeMarker.color.r         = 1.0;
+    edgeMarker.color.g         = 0.0;
+    edgeMarker.color.b         = 0.0;
+    edgeMarker.color.a         = 1.0;
+
+    // Add edge lines
+    for (const auto &[fromNode, neighbors] : Base::adj_list_) {
+      const auto &fromPose = Base::get_pose(fromNode);
+
+      for (const auto &[toNode, weight] : neighbors) {
+        const auto &toPose = Base::get_pose(toNode);
+
+        geometry_msgs::msg::Point fromPoint, toPoint;
+        fromPoint.x = fromPose.x();
+        fromPoint.y = fromPose.y();
+        fromPoint.z = 0.0;
+
+        toPoint.x = toPose.x();
+        toPoint.y = toPose.y();
+        toPoint.z = 0.0;
+
+        edgeMarker.points.push_back(fromPoint);
+        edgeMarker.points.push_back(toPoint);
+      }
+    }
+    markerArray.markers.push_back(edgeMarker);
+
+    // Add node labels if requested
+    if (showNodeLabels) {
+      int labelId = 100;  // Start label IDs from 100
+      for (const auto &node : Base::nodes_) {
+        visualization_msgs::msg::Marker labelMarker;
+        labelMarker.header.frame_id = frameId;
+        labelMarker.header.stamp    = timestamp;
+        labelMarker.ns              = "node_labels";
+        labelMarker.id              = labelId++;
+        labelMarker.type    = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        labelMarker.action  = visualization_msgs::msg::Marker::ADD;
+        labelMarker.scale.z = nodeScale * 2.0;  // Text size
+        labelMarker.color.r = 1.0;
+        labelMarker.color.g = 1.0;
+        labelMarker.color.b = 1.0;
+        labelMarker.color.a = 1.0;
+
+        labelMarker.pose.position.x = node.pose_.x() + 0.1;
+        labelMarker.pose.position.y = node.pose_.y() + 0.1;
+        labelMarker.pose.position.z = nodeScale * 2.0;  // Above the node
+        labelMarker.text            = std::to_string(node.id_);
+
+        markerArray.markers.push_back(labelMarker);
+      }
+    }
+
+    // Add link direction arrows if requested
+    if (showLinkDirections) {
+      int arrowId = 200;  // Start arrow IDs from 200
+      for (const auto &[fromNode, neighbors] : Base::adj_list_) {
+        const auto &fromPose = Base::get_pose(fromNode);
+
+        for (const auto &[toNode, weight] : neighbors) {
+          const auto &toPose = Base::get_pose(toNode);
+
+          visualization_msgs::msg::Marker arrowMarker;
+          arrowMarker.header.frame_id = frameId;
+          arrowMarker.header.stamp    = timestamp;
+          arrowMarker.ns              = "link_directions";
+          arrowMarker.id              = arrowId++;
+          arrowMarker.type            = visualization_msgs::msg::Marker::ARROW;
+          arrowMarker.action          = visualization_msgs::msg::Marker::ADD;
+          arrowMarker.scale.x         = edgeScale * 3.0;  // Arrow length
+          arrowMarker.scale.y         = edgeScale * 1.0;  // Arrow width
+          arrowMarker.scale.z         = edgeScale * 1.0;  // Arrow height
+
+          arrowMarker.color.r = 0.0;
+          arrowMarker.color.g = 0.0;
+          arrowMarker.color.b = 1.0;
+          arrowMarker.color.a = 0.8;
+
+          // Calculate arrow position and orientation
+          double dx     = toPose.x() - fromPose.x();
+          double dy     = toPose.y() - fromPose.y();
+          double length = std::sqrt(dx * dx + dy * dy);
+
+          if (length > 1e-6) {
+            // Position arrow at 70% along the link
+            double t                    = 0.7;
+            arrowMarker.pose.position.x = fromPose.x() + t * dx;
+            arrowMarker.pose.position.y = fromPose.y() + t * dy;
+            arrowMarker.pose.position.z = 0.0;
+
+            // Orient arrow in link direction
+            double          yaw = std::atan2(dy, dx);
+            tf2::Quaternion q;
+            q.setRPY(0, 0, yaw);
+            arrowMarker.pose.orientation.x = q.x();
+            arrowMarker.pose.orientation.y = q.y();
+            arrowMarker.pose.orientation.z = q.z();
+            arrowMarker.pose.orientation.w = q.w();
+
+            markerArray.markers.push_back(arrowMarker);
+          }
+        }
+      }
+    }
+
+    return markerArray;
   }
 };
 

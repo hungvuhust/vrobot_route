@@ -24,8 +24,10 @@ public:
   std::vector<Straightlink> getStraightlinks(const std::string &map_name);
   std::vector<Curvelink>    getCurvelinks(const std::string &map_name);
 
+  using Ptr = std::shared_ptr<DbManager>;
+
 private:
   std::shared_ptr<drogon::orm::DbClient> db_client_;
 };
 
-} // namespace vrobot_route
+}  // namespace vrobot_route

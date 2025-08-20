@@ -29,6 +29,8 @@ typedef struct VNode {
   bool operator<(const VNode &other) const {
     return id_ < other.id_;
   }
+
+  using Ptr = std::shared_ptr<VNode>;
 } v_node_t;
 
 typedef struct VEdge {
@@ -41,6 +43,8 @@ typedef struct VEdge {
   double                       length_;
   double                       width_;
   double                       max_vel_;
+
+  using Ptr = std::shared_ptr<VEdge>;
 } v_edge_t;
 
 inline v_edge_t create_virtual_edge(const Eigen::Vector2d &start_pose,

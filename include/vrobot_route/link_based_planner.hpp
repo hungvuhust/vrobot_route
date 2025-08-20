@@ -28,11 +28,13 @@ public:
    */
   std::pair<std::vector<PathSegment>, std::optional<double>>
   dijkstra_with_modular_link_approach(
-      const Eigen::Vector2d &startPose, const v_node_t &targetNode,
-      double directThreshold = 1.5, size_t maxLinks = 3,
-      double linkDistanceWeight  = 2.0,
-      double maxLinkDistance     = std::numeric_limits<double>::infinity(),
-      double graphDistanceWeight = 1.0) const;
+    const Eigen::Vector2d &startPose,
+    const v_node_t        &targetNode,
+    double                 directThreshold    = 1.5,
+    size_t                 maxLinks           = 3,
+    double                 linkDistanceWeight = 2.0,
+    double maxLinkDistance     = std::numeric_limits<double>::infinity(),
+    double graphDistanceWeight = 1.0) const;
 
   // ========================================================================
   // ENHANCED LINK ACCESS
@@ -49,7 +51,8 @@ public:
   std::pair<std::vector<PathSegment>, std::optional<double>>
   dijkstra_with_link_access(const Eigen::Vector2d &startPose,
                             const v_node_t        &targetNode,
-                            double distanceThreshold = 0.5, size_t maxLinks = 3,
+                            double                 distanceThreshold = 0.5,
+                            size_t                 maxLinks          = 3,
                             double linkDistanceWeight = 2.0) const;
 
   // ========================================================================
@@ -111,8 +114,9 @@ private:
    */
   std::pair<std::vector<PathSegment>, std::optional<double>>
   build_path_through_link(const Eigen::Vector2d &startPose,
-                          const v_node_t &linkStart, const v_node_t &linkEnd,
-                          const v_node_t &targetNode) const;
+                          const v_node_t        &linkStart,
+                          const v_node_t        &linkEnd,
+                          const v_node_t        &targetNode) const;
 };
 
-} // namespace vrobot_route
+}  // namespace vrobot_route

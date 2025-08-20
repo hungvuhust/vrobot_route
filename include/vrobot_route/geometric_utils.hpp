@@ -4,6 +4,7 @@
 #include <Eigen/src/Core/Matrix.h>
 
 #include <vrobot_route/datastructor.hpp>
+#include <vrobot_route/benzier.hpp>
 
 namespace vrobot_route {
 
@@ -51,10 +52,50 @@ public:
    * @param nodeB Second node of the link
    * @return Projection point on line segment
    */
-  Eigen::Vector2d
-  get_projection_point_on_line_segment(const Eigen::Vector2d &query_pose,
-                                       const v_node_t        &nodeA,
-                                       const v_node_t        &nodeB) const;
+  Eigen::Vector2d get_projection_point_on_line_segment(
+    const Eigen::Vector2d &query_pose,
+    const v_node_t        &nodeA,
+    const v_node_t        &nodeB) const;
+
+  /**
+   * @brief Calculate distance from pose to curve segment
+   * @param queryPose Query pose
+   * @param edge The curve edge containing control points
+   * @return Distance from pose to curve
+   */
+  double get_distance_to_curve(const Eigen::Vector2d &query_pose,
+                               const v_edge_t        &edge) const;
+
+  /**
+   * @brief Find projection point of pose onto curve segment
+   * @param queryPose Query pose
+   * @param edge The curve edge containing control points
+   * @return Projection point on curve and parameter t
+   */
+  std::pair<Eigen::Vector2d, double> get_projection_point_on_curve(
+    const Eigen::Vector2d &query_pose,
+    const v_edge_t        &edge) const;
+
+  /**
+   * @brief Find edge between two nodes
+   * @param nodeA First node
+   * @param nodeB Second node
+   * @return Edge if found, nullptr if not found
+   */
+  const v_edge_t *find_edge_between_nodes(const v_node_t &nodeA,
+                                          const v_node_t &nodeB) const;
+
+  /**
+   * @brief Get smart projection point that works for both straight lines and
+   * curves
+   * @param queryPose Query pose
+   * @param nodeA First node
+   * @param nodeB Second node
+   * @return Projection point
+   */
+  Eigen::Vector2d get_smart_projection_point(const Eigen::Vector2d &query_pose,
+                                             const v_node_t        &nodeA,
+                                             const v_node_t &nodeB) const;
 
   /**
    * @brief Find closest links to given pose with distance filtering
@@ -64,8 +105,9 @@ public:
    * @return Vector of (nodeA, nodeB, distance) sorted by distance
    */
   std::vector<std::tuple<v_node_t, v_node_t, double>> get_closest_links(
-      const Eigen::Vector2d &query_pose, size_t max_links = 3,
-      double max_distance = std::numeric_limits<double>::infinity()) const;
+    const Eigen::Vector2d &query_pose,
+    size_t                 max_links = 3,
+    double max_distance = std::numeric_limits<double>::infinity()) const;
 
   // ========================================================================
   // INTERNAL GEOMETRIC CALCULATIONS
@@ -89,9 +131,9 @@ public:
    * @param lineEnd End point of line segment
    * @return Projection point on line segment
    */
-  Eigen::Vector2d
-  get_projection_point_on_line_segment(const Eigen::Vector2d &point,
-                                       const Eigen::Vector2d &line_start,
-                                       const Eigen::Vector2d &line_end) const;
+  Eigen::Vector2d get_projection_point_on_line_segment(
+    const Eigen::Vector2d &point,
+    const Eigen::Vector2d &line_start,
+    const Eigen::Vector2d &line_end) const;
 };
-} // namespace vrobot_route
+}  // namespace vrobot_route

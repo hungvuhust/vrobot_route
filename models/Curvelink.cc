@@ -21,6 +21,7 @@ const std::string Curvelink::Cols::_control_point_1_y = "\"control_point_1_y\"";
 const std::string Curvelink::Cols::_control_point_2_x = "\"control_point_2_x\"";
 const std::string Curvelink::Cols::_control_point_2_y = "\"control_point_2_y\"";
 const std::string Curvelink::Cols::_map_id = "\"map_id\"";
+const std::string Curvelink::Cols::_max_velocity = "\"max_velocity\"";
 const std::string Curvelink::primaryKeyName = "id_curve_link";
 const bool Curvelink::hasPrimaryKey = true;
 const std::string Curvelink::tableName = "amr_ros2.\"curvelink\"";
@@ -33,7 +34,8 @@ const std::vector<typename Curvelink::MetaData> Curvelink::metaData_={
 {"control_point_1_y","float","real",4,0,0,1},
 {"control_point_2_x","float","real",4,0,0,1},
 {"control_point_2_y","float","real",4,0,0,1},
-{"map_id","int32_t","integer",4,0,0,1}
+{"map_id","int32_t","integer",4,0,0,1},
+{"max_velocity","double","double precision",8,0,0,0}
 };
 const std::string &Curvelink::getColumnName(size_t index) noexcept(false)
 {
@@ -76,11 +78,15 @@ Curvelink::Curvelink(const Row &r, const ssize_t indexOffset) noexcept
         {
             mapId_=std::make_shared<int32_t>(r["map_id"].as<int32_t>());
         }
+        if(!r["max_velocity"].isNull())
+        {
+            maxVelocity_=std::make_shared<double>(r["max_velocity"].as<double>());
+        }
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 8 > r.size())
+        if(offset + 9 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -126,13 +132,18 @@ Curvelink::Curvelink(const Row &r, const ssize_t indexOffset) noexcept
         {
             mapId_=std::make_shared<int32_t>(r[index].as<int32_t>());
         }
+        index = offset + 8;
+        if(!r[index].isNull())
+        {
+            maxVelocity_=std::make_shared<double>(r[index].as<double>());
+        }
     }
 
 }
 
 Curvelink::Curvelink(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 8)
+    if(pMasqueradingVector.size() != 9)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -199,6 +210,14 @@ Curvelink::Curvelink(const Json::Value &pJson, const std::vector<std::string> &p
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
             mapId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[7]].asInt64());
+        }
+    }
+    if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson[pMasqueradingVector[8]].isNull())
+        {
+            maxVelocity_=std::make_shared<double>(pJson[pMasqueradingVector[8]].asDouble());
         }
     }
 }
@@ -269,12 +288,20 @@ Curvelink::Curvelink(const Json::Value &pJson) noexcept(false)
             mapId_=std::make_shared<int32_t>((int32_t)pJson["map_id"].asInt64());
         }
     }
+    if(pJson.isMember("max_velocity"))
+    {
+        dirtyFlag_[8]=true;
+        if(!pJson["max_velocity"].isNull())
+        {
+            maxVelocity_=std::make_shared<double>(pJson["max_velocity"].asDouble());
+        }
+    }
 }
 
 void Curvelink::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 8)
+    if(pMasqueradingVector.size() != 9)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -342,6 +369,14 @@ void Curvelink::updateByMasqueradedJson(const Json::Value &pJson,
             mapId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[7]].asInt64());
         }
     }
+    if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson[pMasqueradingVector[8]].isNull())
+        {
+            maxVelocity_=std::make_shared<double>(pJson[pMasqueradingVector[8]].asDouble());
+        }
+    }
 }
 
 void Curvelink::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -407,6 +442,14 @@ void Curvelink::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["map_id"].isNull())
         {
             mapId_=std::make_shared<int32_t>((int32_t)pJson["map_id"].asInt64());
+        }
+    }
+    if(pJson.isMember("max_velocity"))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson["max_velocity"].isNull())
+        {
+            maxVelocity_=std::make_shared<double>(pJson["max_velocity"].asDouble());
         }
     }
 }
@@ -552,6 +595,28 @@ void Curvelink::setMapId(const int32_t &pMapId) noexcept
     dirtyFlag_[7] = true;
 }
 
+const double &Curvelink::getValueOfMaxVelocity() const noexcept
+{
+    static const double defaultValue = double();
+    if(maxVelocity_)
+        return *maxVelocity_;
+    return defaultValue;
+}
+const std::shared_ptr<double> &Curvelink::getMaxVelocity() const noexcept
+{
+    return maxVelocity_;
+}
+void Curvelink::setMaxVelocity(const double &pMaxVelocity) noexcept
+{
+    maxVelocity_ = std::make_shared<double>(pMaxVelocity);
+    dirtyFlag_[8] = true;
+}
+void Curvelink::setMaxVelocityToNull() noexcept
+{
+    maxVelocity_.reset();
+    dirtyFlag_[8] = true;
+}
+
 void Curvelink::updateId(const uint64_t id)
 {
 }
@@ -565,7 +630,8 @@ const std::vector<std::string> &Curvelink::insertColumns() noexcept
         "control_point_1_y",
         "control_point_2_x",
         "control_point_2_y",
-        "map_id"
+        "map_id",
+        "max_velocity"
     };
     return inCols;
 }
@@ -649,6 +715,17 @@ void Curvelink::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[8])
+    {
+        if(getMaxVelocity())
+        {
+            binder << getValueOfMaxVelocity();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 
 const std::vector<std::string> Curvelink::updateColumns() const
@@ -681,6 +758,10 @@ const std::vector<std::string> Curvelink::updateColumns() const
     if(dirtyFlag_[7])
     {
         ret.push_back(getColumnName(7));
+    }
+    if(dirtyFlag_[8])
+    {
+        ret.push_back(getColumnName(8));
     }
     return ret;
 }
@@ -764,6 +845,17 @@ void Curvelink::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
+    if(dirtyFlag_[8])
+    {
+        if(getMaxVelocity())
+        {
+            binder << getValueOfMaxVelocity();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
 }
 Json::Value Curvelink::toJson() const
 {
@@ -832,6 +924,14 @@ Json::Value Curvelink::toJson() const
     {
         ret["map_id"]=Json::Value();
     }
+    if(getMaxVelocity())
+    {
+        ret["max_velocity"]=getValueOfMaxVelocity();
+    }
+    else
+    {
+        ret["max_velocity"]=Json::Value();
+    }
     return ret;
 }
 
@@ -839,7 +939,7 @@ Json::Value Curvelink::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 8)
+    if(pMasqueradingVector.size() == 9)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -929,6 +1029,17 @@ Json::Value Curvelink::toMasqueradedJson(
                 ret[pMasqueradingVector[7]]=Json::Value();
             }
         }
+        if(!pMasqueradingVector[8].empty())
+        {
+            if(getMaxVelocity())
+            {
+                ret[pMasqueradingVector[8]]=getValueOfMaxVelocity();
+            }
+            else
+            {
+                ret[pMasqueradingVector[8]]=Json::Value();
+            }
+        }
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -995,6 +1106,14 @@ Json::Value Curvelink::toMasqueradedJson(
     else
     {
         ret["map_id"]=Json::Value();
+    }
+    if(getMaxVelocity())
+    {
+        ret["max_velocity"]=getValueOfMaxVelocity();
+    }
+    else
+    {
+        ret["max_velocity"]=Json::Value();
     }
     return ret;
 }
@@ -1076,13 +1195,18 @@ bool Curvelink::validateJsonForCreation(const Json::Value &pJson, std::string &e
         err="The map_id column cannot be null";
         return false;
     }
+    if(pJson.isMember("max_velocity"))
+    {
+        if(!validJsonOfField(8, "max_velocity", pJson["max_velocity"], err, true))
+            return false;
+    }
     return true;
 }
 bool Curvelink::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                    const std::vector<std::string> &pMasqueradingVector,
                                                    std::string &err)
 {
-    if(pMasqueradingVector.size() != 8)
+    if(pMasqueradingVector.size() != 9)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1187,6 +1311,14 @@ bool Curvelink::validateMasqueradedJsonForCreation(const Json::Value &pJson,
             return false;
         }
       }
+      if(!pMasqueradingVector[8].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[8]))
+          {
+              if(!validJsonOfField(8, pMasqueradingVector[8], pJson[pMasqueradingVector[8]], err, true))
+                  return false;
+          }
+      }
     }
     catch(const Json::LogicError &e)
     {
@@ -1242,13 +1374,18 @@ bool Curvelink::validateJsonForUpdate(const Json::Value &pJson, std::string &err
         if(!validJsonOfField(7, "map_id", pJson["map_id"], err, false))
             return false;
     }
+    if(pJson.isMember("max_velocity"))
+    {
+        if(!validJsonOfField(8, "max_velocity", pJson["max_velocity"], err, false))
+            return false;
+    }
     return true;
 }
 bool Curvelink::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                  const std::vector<std::string> &pMasqueradingVector,
                                                  std::string &err)
 {
-    if(pMasqueradingVector.size() != 8)
+    if(pMasqueradingVector.size() != 9)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1297,6 +1434,11 @@ bool Curvelink::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
       {
           if(!validJsonOfField(7, pMasqueradingVector[7], pJson[pMasqueradingVector[7]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
+      {
+          if(!validJsonOfField(8, pMasqueradingVector[8], pJson[pMasqueradingVector[8]], err, false))
               return false;
       }
     }
@@ -1411,6 +1553,17 @@ bool Curvelink::validJsonOfField(size_t index,
                 return false;
             }
             if(!pJson.isInt())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 8:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isNumeric())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

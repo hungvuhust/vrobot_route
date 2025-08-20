@@ -9,6 +9,7 @@
 #include <vrobot_local_planner/msg/path.hpp>
 #include <vrobot_local_planner/msg/planner_pose.hpp>
 #include <vrobot_route/datastructor.hpp>
+#include "vrobot_route/benzier.hpp"
 
 namespace vrobot_route {
 
@@ -16,62 +17,91 @@ class NavConversion : public virtual VGraph {
 public:
   using Base = VGraph;
 
-  inline std::vector<Eigen::Vector3d>
-  interpolatePoses(const v_edge_t &pathSegment, double resolution) const {
-
+  inline std::vector<Eigen::Vector3d> interpolatePoses(
+    const v_edge_t &pathSegment,
+    double          resolution) const {
     std::vector<Eigen::Vector3d> interpolatedPoses;
 
-    // Add starting pose
-    interpolatedPoses.emplace_back(pathSegment.start_node_.pose_.x(),
-                                   pathSegment.start_node_.pose_.y(),
-                                   pathSegment.start_node_.theta_);
+    if (pathSegment.type_ == v_link_type_t::STRAIGHT) {
+      // Add starting pose
+      interpolatedPoses.emplace_back(pathSegment.start_node_.pose_.x(),
+                                     pathSegment.start_node_.pose_.y(),
+                                     pathSegment.start_node_.theta_);
 
-    const Eigen::Vector3d &start = Eigen::Vector3d(
-        pathSegment.start_node_.pose_.x(), pathSegment.start_node_.pose_.y(),
-        pathSegment.start_node_.theta_);
-    const Eigen::Vector3d &end = Eigen::Vector3d(
-        pathSegment.end_node_.pose_.x(), pathSegment.end_node_.pose_.y(),
-        pathSegment.end_node_.theta_);
+      const Eigen::Vector3d &start =
+        Eigen::Vector3d(pathSegment.start_node_.pose_.x(),
+                        pathSegment.start_node_.pose_.y(),
+                        pathSegment.start_node_.theta_);
+      const Eigen::Vector3d &end =
+        Eigen::Vector3d(pathSegment.end_node_.pose_.x(),
+                        pathSegment.end_node_.pose_.y(),
+                        pathSegment.end_node_.theta_);
 
-    double dx            = end.x() - start.x();
-    double dy            = end.y() - start.y();
-    double segmentLength = std::sqrt(dx * dx + dy * dy);
+      double dx            = end.x() - start.x();
+      double dy            = end.y() - start.y();
+      double segmentLength = std::sqrt(dx * dx + dy * dy);
 
-    if (segmentLength < resolution) {
-      // Segment too short, just add end point
-      interpolatedPoses.push_back(end);
-      return interpolatedPoses;
-    }
+      if (segmentLength < resolution) {
+        // Segment too short, just add end point
+        interpolatedPoses.push_back(end);
+        return interpolatedPoses;
+      }
 
-    int numSteps = static_cast<int>(std::ceil(segmentLength / resolution));
+      int numSteps = static_cast<int>(std::ceil(segmentLength / resolution));
 
-    for (int i = 1; i <= numSteps; ++i) {
-      double t       = static_cast<double>(i) / numSteps;
-      double interpX = start.x() + t * dx;
-      double interpY = start.y() + t * dy;
+      for (int i = 1; i <= numSteps; ++i) {
+        double t       = static_cast<double>(i) / numSteps;
+        double interpX = start.x() + t * dx;
+        double interpY = start.y() + t * dy;
 
-      // Point-to-point orientation (direction of movement)
-      double theta = std::atan2(dy, dx);
+        // Point-to-point orientation (direction of movement)
+        double theta = std::atan2(dy, dx);
 
-      interpolatedPoses.emplace_back(interpX, interpY, theta);
+        interpolatedPoses.emplace_back(interpX, interpY, theta);
+      }
+    } else if (pathSegment.type_ == v_link_type_t::CURVE) {
+      // Add starting pose
+      interpolatedPoses.emplace_back(pathSegment.start_node_.pose_.x(),
+                                     pathSegment.start_node_.pose_.y(),
+                                     pathSegment.start_node_.theta_);
+
+      bezier::Bezier<3> bezierCurve(
+        {bezier::Point(pathSegment.start_node_.pose_.x(),
+                       pathSegment.start_node_.pose_.y()),
+         bezier::Point(pathSegment.control_points_[0].x(),
+                       pathSegment.control_points_[0].y()),
+         bezier::Point(pathSegment.control_points_[1].x(),
+                       pathSegment.control_points_[1].y()),
+         bezier::Point(pathSegment.end_node_.pose_.x(),
+                       pathSegment.end_node_.pose_.y())});
+
+      for (double t = 0.0; t <= 1.0; t += 0.01) {
+        bezier::Point point = bezierCurve.valueAt(t);
+        interpolatedPoses.emplace_back(point.x, point.y, 0.0);
+      }
+
+      // Add ending pose
+      interpolatedPoses.emplace_back(pathSegment.end_node_.pose_.x(),
+                                     pathSegment.end_node_.pose_.y(),
+                                     pathSegment.end_node_.theta_);
     }
 
     return interpolatedPoses;
   }
 
-  inline vrobot_local_planner::msg::Path
-  toVPath(const std::vector<v_edge_t> &pathSegments, const std::string &frameId,
-          const rclcpp::Time &timestamp, double resolution = 0.01) const {
-
+  inline vrobot_local_planner::msg::Path toVPath(
+    const std::vector<v_edge_t> &pathSegments,
+    const std::string           &frameId,
+    const rclcpp::Time          &timestamp,
+    double                       resolution = 0.01) const {
     vrobot_local_planner::msg::Path vPath;
     vPath.header.frame_id = frameId;
     vPath.header.stamp    = timestamp;
 
     for (const auto &segment : pathSegments) {
-
       // Interpolate poses
       std::vector<Eigen::Vector3d> interpolatedPoses =
-          interpolatePoses(segment, resolution);
+        interpolatePoses(segment, resolution);
 
       for (const auto &pose : interpolatedPoses) {
         vrobot_local_planner::msg::PlannerPose plannerPose;
@@ -95,6 +125,21 @@ public:
 
     return vPath;
   }
+
+  inline nav_msgs::msg::Path toPath(
+    const vrobot_local_planner::msg::Path &vPath) const {
+    nav_msgs::msg::Path path;
+    path.header = vPath.header;
+
+    for (const auto &pose : vPath.poses) {
+      geometry_msgs::msg::PoseStamped poseStamped;
+      poseStamped.header = vPath.header;
+      poseStamped.pose   = pose.pose;
+      path.poses.push_back(poseStamped);
+    }
+
+    return path;
+  }
 };
 
-} // namespace vrobot_route
+}  // namespace vrobot_route

@@ -108,7 +108,7 @@ Pathfinding::dijkstra_from_pose(const Eigen::Vector2d &start_pose,
   // Check if distance to closest node exceeds threshold
   double distance_to_closest = Base::get_distance_to_nearest_node(start_pose);
   if (distance_to_closest > max_distance_to_graph) {
-    return {{}, std::nullopt}; // Pose is too far from graph
+    return {{}, std::nullopt};  // Pose is too far from graph
   }
 
   // Get path from closest node to target
@@ -123,7 +123,7 @@ Pathfinding::dijkstra_from_pose(const Eigen::Vector2d &start_pose,
   const Eigen::Vector2d   &closest_pose = Base::get_pose(closest_node);
   double initial_distance               = (start_pose - closest_pose).norm();
 
-  if (initial_distance > 1e-6) { // Only add if not already at the node
+  if (initial_distance > 1e-6) {  // Only add if not already at the node
     fullPath.emplace_back(create_virtual_edge(start_pose, closest_pose));
   }
 
@@ -138,7 +138,6 @@ std::pair<std::vector<Pathfinding::PathSegment>, std::optional<double>>
 Pathfinding::dijkstra_pose_to_pose(const Eigen::Vector2d &start_pose,
                                    const Eigen::Vector2d &target_pose,
                                    double maxDistanceToGraph) const {
-
   if (Base::is_empty()) {
     return {{}, std::nullopt};
   }
@@ -149,16 +148,16 @@ Pathfinding::dijkstra_pose_to_pose(const Eigen::Vector2d &start_pose,
 
   // Check if start pose is within threshold
   double start_distance_to_graph =
-      (start_pose - Base::get_pose(start_node)).norm();
+    (start_pose - Base::get_pose(start_node)).norm();
   if (start_distance_to_graph > maxDistanceToGraph) {
-    return {{}, std::nullopt}; // Start pose is too far from graph
+    return {{}, std::nullopt};  // Start pose is too far from graph
   }
 
   // Check if target pose is within threshold
   double target_distance_to_graph =
-      (target_pose - Base::get_pose(target_node)).norm();
+    (target_pose - Base::get_pose(target_node)).norm();
   if (target_distance_to_graph > maxDistanceToGraph) {
-    return {{}, std::nullopt}; // Target pose is too far from graph
+    return {{}, std::nullopt};  // Target pose is too far from graph
   }
 
   // Get path between nodes
@@ -176,7 +175,6 @@ Pathfinding::dijkstra_pose_to_pose(const Eigen::Vector2d &start_pose,
   const Eigen::Vector2d &start_node_pose = Base::get_pose(start_node);
   double                 start_distance = (start_pose - start_node_pose).norm();
   if (start_distance > 1e-6) {
-
     v_edge_t virtual_edge = create_virtual_edge(start_pose, start_node_pose);
     fullPath.emplace_back(virtual_edge);
     totalDistance += start_distance;
@@ -190,7 +188,6 @@ Pathfinding::dijkstra_pose_to_pose(const Eigen::Vector2d &start_pose,
   const Eigen::Vector2d &target_node_pose = Base::get_pose(target_node);
   double                 end_distance = (target_node_pose - target_pose).norm();
   if (end_distance > 1e-6) {
-
     v_edge_t virtual_edge = create_virtual_edge(target_node_pose, target_pose);
 
     fullPath.emplace_back(virtual_edge);
@@ -201,7 +198,7 @@ Pathfinding::dijkstra_pose_to_pose(const Eigen::Vector2d &start_pose,
 }
 
 double Pathfinding::calculate_path_distance(
-    const std::vector<Pathfinding::PathSegment> &path_segments) const {
+  const std::vector<Pathfinding::PathSegment> &path_segments) const {
   double distance = 0.0;
   for (const auto &segment : path_segments) {
     distance += segment.length_;
@@ -210,7 +207,7 @@ double Pathfinding::calculate_path_distance(
 }
 
 bool Pathfinding::is_valid_path(
-    const std::vector<Pathfinding::PathSegment> &path_segments) const {
+  const std::vector<Pathfinding::PathSegment> &path_segments) const {
   for (const auto &segment : path_segments) {
     if (segment.start_node_ == segment.end_node_) {
       return false;
@@ -219,4 +216,4 @@ bool Pathfinding::is_valid_path(
   return true;
 }
 
-} // namespace vrobot_route
+}  // namespace vrobot_route

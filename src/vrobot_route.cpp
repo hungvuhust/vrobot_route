@@ -2,11 +2,19 @@
 
 #include <vrobot_route/graph_pose.hpp>
 
+#include <nav_msgs/msg/path.hpp>
+
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
 
+  // Node ros2
+  auto node      = rclcpp::Node::make_shared("vrobot_route");
+  // publisher
+  auto publisher = node->create_publisher<nav_msgs::msg::Path>(
+    "vrobot_route/path", rclcpp::QoS(10).transient_local());
+
   auto db_manager = std::make_shared<vrobot_route::DbManager>(
-      "host=127.0.0.1 port=5432 dbname=amr_01 user=amr password=1234512345");
+    "host=127.0.0.1 port=5432 dbname=amr_01 user=amr password=1234512345");
 
   auto map           = db_manager->getMap("mapmoi");
   auto nodes         = db_manager->getNodes("mapmoi");
@@ -37,9 +45,32 @@ int main(int argc, char *argv[]) {
     vedge.type_       = vrobot_route::v_link_type_t::STRAIGHT;
     vedge.length_     = (vnodes_map[straightlink.getValueOfIdStart()].pose_ -
                      vnodes_map[straightlink.getValueOfIdEnd()].pose_)
-                        .norm();
+                      .norm();
     vedge.width_   = 0.5;
     vedge.max_vel_ = straightlink.getValueOfMaxVelocity();
+
+    vedges.push_back(vedge);
+  }
+  std::cout << "Curvelinks: " << curvelinks.size() << std::endl;
+  for (const auto &curvelink : curvelinks) {
+    vrobot_route::v_edge_t vedge;
+    vedge.id_         = curvelink.getValueOfIdCurveLink();
+    vedge.start_node_ = vnodes_map[curvelink.getValueOfIdStart()];
+    vedge.end_node_   = vnodes_map[curvelink.getValueOfIdEnd()];
+    vedge.type_       = vrobot_route::v_link_type_t::CURVE;
+    vedge.length_     = (vnodes_map[curvelink.getValueOfIdStart()].pose_ -
+                     vnodes_map[curvelink.getValueOfIdEnd()].pose_)
+                      .norm();
+
+    vedge.control_points_.push_back(
+      Eigen::Vector2d(curvelink.getValueOfControlPoint1X(),
+                      curvelink.getValueOfControlPoint1Y()));
+    vedge.control_points_.push_back(
+      Eigen::Vector2d(curvelink.getValueOfControlPoint2X(),
+                      curvelink.getValueOfControlPoint2Y()));
+
+    vedge.max_vel_ = curvelink.getValueOfMaxVelocity();
+    vedge.width_   = 0.5;
 
     vedges.push_back(vedge);
   }
@@ -51,7 +82,7 @@ int main(int argc, char *argv[]) {
   config.maxLinkDistance = 0.5;
   config.enablePruning   = false;
 
-  auto path = graph.planPath(Eigen::Vector2d(0.0, 0.0), vnodes[7], config);
+  auto path = graph.planPath(Eigen::Vector2d(1.75, 0.5), vnodes[7], config);
 
   if (path.totalDistance.has_value()) {
     for (const auto &segment : path.pathSegments) {
@@ -60,11 +91,23 @@ int main(int argc, char *argv[]) {
                 << "End: " << segment.end_node_.id_ << "\t"
                 << "Length: " << segment.length_ << std::endl;
     }
+
+    auto vpath =
+      graph.pathSegmentsToVPath(path.pathSegments, "map", node->now(), 0.01);
+    auto nav_path = graph.toPath(vpath);
+
+    std::cout << "Publishing path with " << nav_path.poses.size() << " poses"
+              << std::endl;
+    publisher->publish(nav_path);
     std::cout << "\t- Distance: " << path.totalDistance.value() << std::endl;
   } else {
     std::cout << "No path found!" << std::endl;
   }
 
+  // spin
+  rclcpp::spin(node);
+
+  // shutdown
   rclcpp::shutdown();
 
   return 0;

@@ -20,9 +20,15 @@ typedef struct VNode {
   double          curvature_;
 
   // Equality operator for unordered_map
-  bool operator==(const VNode &other) const { return id_ == other.id_; }
-  bool operator!=(const VNode &other) const { return id_ != other.id_; }
-  bool operator<(const VNode &other) const { return id_ < other.id_; }
+  bool operator==(const VNode &other) const {
+    return id_ == other.id_;
+  }
+  bool operator!=(const VNode &other) const {
+    return id_ != other.id_;
+  }
+  bool operator<(const VNode &other) const {
+    return id_ < other.id_;
+  }
 } v_node_t;
 
 typedef struct VEdge {
@@ -94,7 +100,7 @@ struct VGraph {
 
   explicit VGraph(const std::vector<v_node_t> &nodes,
                   const std::vector<v_edge_t> &edges)
-      : nodes_(nodes), edges_(edges) {
+    : nodes_(nodes), edges_(edges) {
     build_graph(nodes, edges);
   }
 
@@ -141,8 +147,8 @@ struct VGraph {
    * @param nodeId Node identifier
    * @return Vector of (neighbor_id, edge) pairs
    */
-  inline std::vector<std::pair<v_node_t, v_edge_t>>
-  get_neighbors(const v_node_t &node) const {
+  inline std::vector<std::pair<v_node_t, v_edge_t>> get_neighbors(
+    const v_node_t &node) const {
     auto it = adj_list_.find(node);
     if (it == adj_list_.end()) {
       static const std::vector<std::pair<v_node_t, v_edge_t>> empty;
@@ -155,19 +161,25 @@ struct VGraph {
    * @brief Get number of nodes
    * @return Number of nodes in graph
    */
-  inline size_t get_num_nodes() const { return nodes_.size(); }
+  inline size_t get_num_nodes() const {
+    return nodes_.size();
+  }
 
   /**
    * @brief Get number of edges
    * @return Total number of directed edges
    */
-  inline size_t get_num_edges() const { return edges_.size(); }
+  inline size_t get_num_edges() const {
+    return edges_.size();
+  }
 
   /**
    * @brief Check if graph is empty
    * @return True if graph has no nodes
    */
-  inline bool is_empty() const { return nodes_.empty(); }
+  inline bool is_empty() const {
+    return nodes_.empty();
+  }
 
   /**
    * @brief Clear all data
@@ -201,4 +213,4 @@ private:
   }
 };
 
-} // namespace vrobot_route
+}  // namespace vrobot_route

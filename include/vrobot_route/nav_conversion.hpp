@@ -66,9 +66,11 @@ public:
       }
     } else if (pathSegment.type_ == v_link_type_t::CURVE) {
       // Sử dụng parameter metadata để render đúng phần curve cần thiết
-      double t_start = pathSegment.is_partial_curve_ ? pathSegment.curve_start_param_ : 0.0;
-      double t_end = pathSegment.is_partial_curve_ ? pathSegment.curve_end_param_ : 1.0;
-      
+      double t_start =
+        pathSegment.is_partial_curve_ ? pathSegment.curve_start_param_ : 0.0;
+      double t_end =
+        pathSegment.is_partial_curve_ ? pathSegment.curve_end_param_ : 1.0;
+
       // Tạo Bezier curve từ control points gốc trong database
       bezier::Bezier<3> bezierCurve(
         {bezier::Point(pathSegment.start_node_.pose_.x(),
@@ -82,22 +84,27 @@ public:
 
       // Sử dụng resolution parameter thay vì hard-code 0.01
       double step = resolution;
-      
+
       // Add starting pose tại t_start
       bezier::Point start_point = bezierCurve.valueAt(t_start);
-      interpolatedPoses.emplace_back(start_point.x, start_point.y, pathSegment.start_node_.theta_);
+      interpolatedPoses.emplace_back(start_point.x,
+                                     start_point.y,
+                                     pathSegment.start_node_.theta_);
 
       // Interpolate chỉ trong khoảng [t_start, t_end] của curve gốc
       for (double t = t_start + step; t <= t_end; t += step) {
-        if (t >= t_end - step/2) {
+        if (t >= t_end - step / 2) {
           // Điểm cuối: sử dụng t_end chính xác
           bezier::Point end_point = bezierCurve.valueAt(t_end);
-          interpolatedPoses.emplace_back(end_point.x, end_point.y, pathSegment.end_node_.theta_);
+          interpolatedPoses.emplace_back(end_point.x,
+                                         end_point.y,
+                                         pathSegment.end_node_.theta_);
           break;
         }
-        
+
         bezier::Point point = bezierCurve.valueAt(t);
-        bezier::Point nextPoint = bezierCurve.valueAt(std::min(t + step, t_end));
+        bezier::Point nextPoint =
+          bezierCurve.valueAt(std::min(t + step, t_end));
         double theta = std::atan2(nextPoint.y - point.y, nextPoint.x - point.x);
 
         interpolatedPoses.emplace_back(point.x, point.y, theta);

@@ -3,6 +3,12 @@
 #include <vrobot_route/graph_pose.hpp>
 
 #include <rclcpp/rclcpp.hpp>
+#include <vrobot_route/action/move_to_pose.hpp>
+#include <vrobot_route/simple_action_server.hpp>
+#include "vrobot_local_planner/action/v_follow_path.hpp"
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 namespace vrobot_route {
 
@@ -13,6 +19,7 @@ public:
 
   void init_db();
   void init_publishers();
+  void init_action_server();
 
   bool update_graph(std::string map_name);
 
@@ -32,6 +39,21 @@ public:
   std::vector<std::vector<vrobot_route::v_edge_t>> subdivide_sharp_turns(
     const std::vector<vrobot_route::v_edge_t> &path_segments,
     double max_angle_threshold = M_PI / 180 * 100);  // 100 degrees default
+
+protected:
+  using Action       = vrobot_route::action::MoveToPose;
+  using ActionServer = vrobot_route::SimpleActionServer<Action>;
+  std::unique_ptr<ActionServer> action_server_;
+
+  void execute_move_to_pose();
+  void send_follow_path_goal(const std::vector<vrobot_route::v_edge_t> &path,
+                             bool is_last_goal = false);
+
+  rclcpp_action::Client<vrobot_local_planner::action::VFollowPath>::SharedPtr
+                          v_follow_path_client_;
+  std::condition_variable cv_follow_path_goal_;
+  std::mutex              mtx_follow_path_goal_;
+  bool                    is_goal_completed_{false};
 
 private:
   // Helper methods for angle calculations
@@ -56,5 +78,7 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
                                                     graph_publisher_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
+  rclcpp::Publisher<vrobot_local_planner::msg::Path>::SharedPtr
+    vpath_publisher_;
 };
 }  // namespace vrobot_route

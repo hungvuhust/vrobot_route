@@ -1,17 +1,21 @@
 #include "rclcpp/rclcpp.hpp"
-
 #include <vrobot_route/graph_pose.hpp>
-
 #include <nav_msgs/msg/path.hpp>
-
 #include <vrobot_route/vrobot_route.hpp>
 #include <vrobot_route/benzier.hpp>
 
 namespace vrobot_route {
 
+constexpr char *kActionMoveToPoseName  = "/move_to_pose";
+constexpr char *kActionMoveToPoseTopic = "/vrobot_route/path";
+constexpr char *kGraphVisTopic         = "/graph_vis";
+constexpr char *kActionVFollowPathName = "/v_follow_path";
+constexpr char *kFollowPathTopic       = "/vrobot_route/follow_path";
+
 VrobotRoute::VrobotRoute() : rclcpp::Node("vrobot_route") {
   init_db();
   init_publishers();
+  init_action_server();
 }
 
 VrobotRoute::~VrobotRoute() {
@@ -23,11 +27,157 @@ void VrobotRoute::init_db() {
 
 void VrobotRoute::init_publishers() {
   graph_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
-    "/graph_vis", rclcpp::QoS(10).transient_local());
+    kGraphVisTopic, rclcpp::QoS(10).transient_local());
 
   path_publisher_ =
-    create_publisher<nav_msgs::msg::Path>("vrobot_route/path",
+    create_publisher<nav_msgs::msg::Path>(kActionMoveToPoseTopic,
                                           rclcpp::QoS(10).transient_local());
+  vpath_publisher_ = create_publisher<vrobot_local_planner::msg::Path>(
+    kFollowPathTopic, rclcpp::QoS(10).transient_local());
+}
+
+void VrobotRoute::init_action_server() {
+  // Create v follow path action client
+  v_follow_path_client_ =
+    rclcpp_action::create_client<vrobot_local_planner::action::VFollowPath>(
+      this, kActionVFollowPathName);
+  // Create move to pose action server
+  action_server_ =
+    std::make_unique<ActionServer>(this,
+                                   kActionMoveToPoseName,
+                                   std::bind(&VrobotRoute::execute_move_to_pose,
+                                             this),
+                                   nullptr,
+                                   std::chrono::milliseconds(500),
+                                   true);
+  action_server_->activate();
+}
+
+void VrobotRoute::send_follow_path_goal(
+  const std::vector<vrobot_route::v_edge_t> &path,
+  bool                                       is_last_goal) {
+  // Convert path to nav_msgs::msg::Path
+  auto vpath    = graph_->pathSegmentsToVPath(path, "map", this->now(), 0.01);
+  auto nav_path = graph_->toPath(vpath);
+  vpath_publisher_->publish(vpath);
+  publish_path(nav_path);
+  is_goal_completed_ = false;
+  // Send goal to follow path action server
+  auto goal          = vrobot_local_planner::action::VFollowPath::Goal();
+  goal.path          = vpath;
+  if (!is_last_goal) {
+    goal.goal_checker_id = "simple_goal_checker";
+  } else {
+    goal.goal_checker_id = "simple_goal_checker";
+  }
+
+  auto send_goal_options = rclcpp_action::Client<
+    vrobot_local_planner::action::VFollowPath>::SendGoalOptions();
+  send_goal_options.goal_response_callback =
+    [this](rclcpp_action::ClientGoalHandle<
+           vrobot_local_planner::action::VFollowPath>::SharedPtr goal_handle) {
+      RCLCPP_INFO(get_logger(), "Goal accepted");
+    };
+  send_goal_options.feedback_callback =
+    [this](
+      rclcpp_action::ClientGoalHandle<
+        vrobot_local_planner::action::VFollowPath>::SharedPtr goal_handle,
+      const std::shared_ptr<
+        const vrobot_local_planner::action::VFollowPath::Feedback> feedback) {
+      RCLCPP_DEBUG(get_logger(),
+                   "Feedback: %f, %f",
+                   feedback->speed,
+                   feedback->distance_to_goal);
+
+      auto feedback_msg   = std::make_shared<typename Action::Feedback>();
+      feedback_msg->speed = feedback->speed;
+      feedback_msg->distance_remaining = feedback->distance_to_goal;
+      action_server_->publish_feedback(feedback_msg);
+    };
+  send_goal_options.result_callback =
+    [this](const rclcpp_action::ClientGoalHandle<
+           vrobot_local_planner::action::VFollowPath>::WrappedResult
+             &follow_result) {
+      RCLCPP_INFO(get_logger(), "Goal completed");
+
+      switch (follow_result.code) {
+        case rclcpp_action::ResultCode::SUCCEEDED: {
+          RCLCPP_INFO(get_logger(), "Goal completed");
+          is_goal_completed_ = true;
+          cv_follow_path_goal_.notify_all();
+          break;
+        }
+
+        case rclcpp_action::ResultCode::ABORTED: {
+          RCLCPP_ERROR(get_logger(), "Goal aborted");
+          is_goal_completed_ = true;
+          cv_follow_path_goal_.notify_all();
+        } break;
+
+        case rclcpp_action::ResultCode::CANCELED: {
+          RCLCPP_WARN(get_logger(), "Goal canceled");
+          is_goal_completed_ = true;
+          cv_follow_path_goal_.notify_all();
+        } break;
+
+        default: {
+          RCLCPP_ERROR(get_logger(), "Goal failed");
+          is_goal_completed_ = true;
+          cv_follow_path_goal_.notify_all();
+        } break;
+      }
+    };
+
+  v_follow_path_client_->async_send_goal(goal, send_goal_options);
+  std::unique_lock<std::mutex> lock(mtx_follow_path_goal_);
+  cv_follow_path_goal_.wait(lock, [this] { return is_goal_completed_; });
+}
+
+void VrobotRoute::execute_move_to_pose() {
+  RCLCPP_INFO(get_logger(), "Executing move to pose");
+  try {
+    auto goal = action_server_->get_current_goal();
+    RCLCPP_INFO(get_logger(), "Goal: %ld", goal->target_node_id);
+    RCLCPP_INFO(get_logger(),
+                "Goal: %f, %f, %f",
+                goal->current_pose.x,
+                goal->current_pose.y,
+                goal->current_pose.theta);
+
+    auto result =
+      getPath(Eigen::Vector2d(goal->current_pose.x, goal->current_pose.y),
+              goal->target_node_id,
+              goal->map_name);
+
+    if (result.pathSegments.empty()) {
+      RCLCPP_ERROR(get_logger(), "No path found");
+      std::shared_ptr<Action::Result> result =
+        std::make_shared<Action::Result>();
+      action_server_->terminate_current(result);
+      return;
+    }
+
+    auto subdivided_paths = subdivide_sharp_turns(result.pathSegments);
+
+    // Check if follow path action is available
+    if (!v_follow_path_client_->wait_for_action_server(
+          std::chrono::seconds(5))) {
+      throw std::runtime_error("Follow path action server is not available");
+    }
+
+    // Send follow path goal for each subpath
+    for (size_t i = 0; i < subdivided_paths.size(); ++i) {
+      send_follow_path_goal(subdivided_paths[i],
+                            i == subdivided_paths.size() - 1);
+    }
+
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(get_logger(), "%s", e.what());
+    std::shared_ptr<Action::Result> result = std::make_shared<Action::Result>();
+    action_server_->terminate_current(result);
+    return;
+  }
+  action_server_->succeeded_current();
 }
 
 bool VrobotRoute::update_graph(std::string map_name) {
@@ -69,8 +219,9 @@ bool VrobotRoute::update_graph(std::string map_name) {
       vedge.length_     = (vnodes_map[straightlink.getValueOfIdStart()].pose_ -
                        vnodes_map[straightlink.getValueOfIdEnd()].pose_)
                         .norm();
-      vedge.width_   = 0.5;
-      vedge.max_vel_ = straightlink.getValueOfMaxVelocity();
+      vedge.width_ = 0.5;
+      vedge.max_vel_ =
+        straightlink.getMaxVelocity() ? *straightlink.getMaxVelocity() : 2.0;
 
       vedges_.push_back(vedge);
     }
@@ -115,16 +266,17 @@ bool VrobotRoute::update_graph(std::string map_name) {
         Eigen::Vector2d(curvelink.getValueOfControlPoint2X(),
                         curvelink.getValueOfControlPoint2Y()));
 
-      vedge.max_vel_ = curvelink.getValueOfMaxVelocity();
-      vedge.width_   = 0.5;
+      vedge.max_vel_ =
+        curvelink.getMaxVelocity() ? *curvelink.getMaxVelocity() : 2.0;
+      vedge.width_ = 0.5;
 
       vedges_.push_back(vedge);
     }
 
     graph_ = std::make_shared<vrobot_route::GraphPose>(vnodes_, vedges_);
 
-    auto graph_vis = graph_->visualizeGraph(
-      "map", this->get_clock()->now(), 0.1, 0.1, true, true);
+    auto graph_vis =
+      graph_->visualizeGraph("map", this->now(), 0.1, 0.1, true, true);
     graph_publisher_->publish(graph_vis);
 
   } catch (const std::exception &e) {
@@ -307,46 +459,6 @@ int main(int argc, char *argv[]) {
 
   // Node ros2
   auto node = std::make_shared<vrobot_route::VrobotRoute>();
-
-  auto path = node->getPath(Eigen::Vector2d(0.5, -0.2), 7, "mapmoi");
-
-  if (path.totalDistance.has_value()) {
-    std::cout << "Original path:" << std::endl;
-    for (const auto &segment : path.pathSegments) {
-      std::cout << "\t- Segment: " << segment.id_ << "\t"
-                << "Start: " << segment.start_node_.id_ << "\t"
-                << "End: " << segment.end_node_.id_ << "\t"
-                << "Length: " << segment.length_ << "\t"
-                << "Max velocity: " << segment.max_vel_ << " m/s" << std::endl;
-    }
-
-    // Apply sharp turn subdivision
-    auto subdivided_paths = node->subdivide_sharp_turns(path.pathSegments);
-
-    std::cout << "\nSubdivided paths:" << std::endl;
-    for (size_t i = 0; i < subdivided_paths.size(); ++i) {
-      std::cout << "Sub-path " << i << ":" << std::endl;
-      for (const auto &segment : subdivided_paths[i]) {
-        std::cout << "\t- Segment: " << segment.id_ << "\t"
-                  << "Start: " << segment.start_node_.id_ << "\t"
-                  << "End: " << segment.end_node_.id_ << "\t"
-                  << "Length: " << segment.length_ << "\t"
-                  << "Max velocity: " << segment.max_vel_ << " m/s"
-                  << std::endl;
-      }
-    }
-
-    for (const auto &subpath : subdivided_paths) {
-      auto nav_path = node->toPath(subpath, "map", node->now(), 0.01);
-      node->publish_path(nav_path);
-      std::cout << "Publishing path with " << nav_path.poses.size() << " poses"
-                << std::endl;
-      std::this_thread::sleep_for(std::chrono::seconds(4));
-    }
-
-  } else {
-    std::cout << "No path found!" << std::endl;
-  }
 
   // spin
   rclcpp::spin(node);

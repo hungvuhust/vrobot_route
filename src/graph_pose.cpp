@@ -50,12 +50,13 @@ GraphPose::PlanningResult GraphPose::planPath(
     }
   }
 
-  // Use greedy strategy: evaluate 4 closest links within tolerance, choose shortest total path
-  auto [linkPath, linkDistance] =
-    this->dijkstra_with_greedy_strategy(startPose,
-                                        targetNode,
-                                        config.maxLinkDistance,  // Use as tolerance
-                                        4);  // Evaluate 4 closest links
+  // Use greedy strategy: evaluate 4 closest links within tolerance, choose
+  // shortest total path
+  auto [linkPath, linkDistance] = this->dijkstra_with_greedy_strategy(
+    startPose,
+    targetNode,
+    config.maxLinkDistance,  // Use as tolerance
+    4);                      // Evaluate 4 closest links
 
   if (linkDistance) {
     result.pathSegments                  = linkPath;

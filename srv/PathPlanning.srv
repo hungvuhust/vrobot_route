@@ -1,0 +1,13 @@
+# PathPlanning.srv
+# Request
+string map_name            # Tên bản đồ
+uint64 target_node_id      # ID của node đích
+geometry_msgs/Pose2D current_pose   # Tọa độ hiện tại
+
+---
+# Response
+bool success               # Thành công hay không
+string algorithm_used      # Thuật toán được sử dụng
+string error_message       # Thông báo lỗi (nếu có)
+float64 total_distance     # Tổng khoảng cách của path
+nav_msgs/Path path         # Path được tính toán 

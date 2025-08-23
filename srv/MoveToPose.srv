@@ -1,0 +1,6 @@
+string map_name
+uint64 target_node_id
+
+---
+bool success
+string error_message

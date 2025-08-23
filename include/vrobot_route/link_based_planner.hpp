@@ -36,6 +36,21 @@ public:
     double maxLinkDistance     = std::numeric_limits<double>::infinity(),
     double graphDistanceWeight = 1.0) const;
 
+  /**
+   * @brief Greedy strategy: find closest links within tolerance, evaluate complete paths, choose shortest
+   * @param startPose Starting pose
+   * @param targetNode Target node ID
+   * @param tolerance Maximum distance to consider links
+   * @param maxLinks Maximum number of links to evaluate (default 4)
+   * @return Pair of (path_segments, total_distance)
+   */
+  std::pair<std::vector<PathSegment>, std::optional<double>>
+  dijkstra_with_greedy_strategy(
+    const Eigen::Vector2d &startPose,
+    const v_node_t        &targetNode,
+    double                 tolerance = 0.5,
+    size_t                 maxLinks = 4) const;
+
   // ========================================================================
   // ENHANCED LINK ACCESS
   // ========================================================================

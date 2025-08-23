@@ -16,9 +16,9 @@ public:
 
   bool update_graph(std::string map_name);
 
-  vrobot_route::GraphPose::PlanningResult test(Eigen::Vector2d start,
-                                               int             end_id,
-                                               std::string     map_name);
+  vrobot_route::GraphPose::PlanningResult getPath(Eigen::Vector2d start,
+                                                  int             end_id,
+                                                  std::string     map_name);
 
   nav_msgs::msg::Path toPath(
     const std::vector<vrobot_route::v_edge_t> &path_segments,
@@ -28,7 +28,19 @@ public:
 
   void publish_path(const nav_msgs::msg::Path &path);
 
+  // Sharp turn subdivision methods
+  std::vector<std::vector<vrobot_route::v_edge_t>> subdivide_sharp_turns(
+    const std::vector<vrobot_route::v_edge_t> &path_segments,
+    double max_angle_threshold = M_PI / 180 * 100);  // 100 degrees default
+
 private:
+  // Helper methods for angle calculations
+  double get_straight_segment_angle(const vrobot_route::v_edge_t &segment);
+  double get_curve_start_angle(const vrobot_route::v_edge_t &curve_segment);
+  double get_curve_end_angle(const vrobot_route::v_edge_t &curve_segment);
+  double calculate_angle_between_segments(
+    const vrobot_route::v_edge_t &current_segment,
+    const vrobot_route::v_edge_t &next_segment);
   std::shared_ptr<vrobot_route::GraphPose> graph_;
   std::vector<vrobot_route::v_node_t>      vnodes_;
   std::vector<vrobot_route::v_edge_t>      vedges_;

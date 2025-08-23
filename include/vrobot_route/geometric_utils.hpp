@@ -76,6 +76,7 @@ public:
     const Eigen::Vector2d &query_pose,
     const v_edge_t        &edge) const;
 
+
   /**
    * @brief Find edge between two nodes
    * @param nodeA First node

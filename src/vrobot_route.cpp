@@ -5,6 +5,7 @@
 #include <nav_msgs/msg/path.hpp>
 
 #include <vrobot_route/vrobot_route.hpp>
+#include <vrobot_route/benzier.hpp>
 
 namespace vrobot_route {
 
@@ -80,9 +81,32 @@ bool VrobotRoute::update_graph(std::string map_name) {
       vedge.start_node_ = vnodes_map[curvelink.getValueOfIdStart()];
       vedge.end_node_   = vnodes_map[curvelink.getValueOfIdEnd()];
       vedge.type_       = vrobot_route::v_link_type_t::CURVE;
-      vedge.length_     = (vnodes_map[curvelink.getValueOfIdStart()].pose_ -
-                       vnodes_map[curvelink.getValueOfIdEnd()].pose_)
-                        .norm();
+      // Tính length thực của curve thay vì khoảng cách thẳng
+      bezier::Bezier<3> bezierCurve(
+        {bezier::Point(vnodes_map[curvelink.getValueOfIdStart()].pose_.x(),
+                       vnodes_map[curvelink.getValueOfIdStart()].pose_.y()),
+         bezier::Point(curvelink.getValueOfControlPoint1X(),
+                       curvelink.getValueOfControlPoint1Y()),
+         bezier::Point(curvelink.getValueOfControlPoint2X(),
+                       curvelink.getValueOfControlPoint2Y()),
+         bezier::Point(vnodes_map[curvelink.getValueOfIdEnd()].pose_.x(),
+                       vnodes_map[curvelink.getValueOfIdEnd()].pose_.y())});
+
+      // Tính arc length bằng cách sample curve
+      double        arcLength = 0.0;
+      const int     samples   = 100;
+      bezier::Point prevPoint = bezierCurve.valueAt(0.0);
+
+      for (int i = 1; i <= samples; ++i) {
+        double        t            = static_cast<double>(i) / samples;
+        bezier::Point currentPoint = bezierCurve.valueAt(t);
+        double        dx           = currentPoint.x - prevPoint.x;
+        double        dy           = currentPoint.y - prevPoint.y;
+        arcLength += std::sqrt(dx * dx + dy * dy);
+        prevPoint = currentPoint;
+      }
+
+      vedge.length_ = arcLength;
 
       vedge.control_points_.push_back(
         Eigen::Vector2d(curvelink.getValueOfControlPoint1X(),
@@ -110,7 +134,7 @@ bool VrobotRoute::update_graph(std::string map_name) {
   return true;
 }
 
-vrobot_route::GraphPose::PlanningResult VrobotRoute::test(
+vrobot_route::GraphPose::PlanningResult VrobotRoute::getPath(
   Eigen::Vector2d start,
   int             end_id,
   std::string     map_name) {
@@ -149,6 +173,133 @@ void VrobotRoute::publish_path(const nav_msgs::msg::Path &path) {
   path_publisher_->publish(path);
 }
 
+// Helper functions for angle calculations
+double VrobotRoute::get_straight_segment_angle(
+  const vrobot_route::v_edge_t &segment) {
+  Eigen::Vector2d direction =
+    segment.end_node_.pose_ - segment.start_node_.pose_;
+  return std::atan2(direction.y(), direction.x());
+}
+
+double VrobotRoute::get_curve_start_angle(
+  const vrobot_route::v_edge_t &curve_segment) {
+  if (curve_segment.control_points_.size() < 2) {
+    return get_straight_segment_angle(curve_segment);
+  }
+
+  // Hướng từ start node đến control point đầu tiên
+  Eigen::Vector2d start_direction =
+    curve_segment.control_points_[0] - curve_segment.start_node_.pose_;
+  return std::atan2(start_direction.y(), start_direction.x());
+}
+
+double VrobotRoute::get_curve_end_angle(
+  const vrobot_route::v_edge_t &curve_segment) {
+  if (curve_segment.control_points_.size() < 2) {
+    return get_straight_segment_angle(curve_segment);
+  }
+
+  // Hướng từ control point cuối đến end node
+  Eigen::Vector2d end_direction =
+    curve_segment.end_node_.pose_ - curve_segment.control_points_[1];
+  return std::atan2(end_direction.y(), end_direction.x());
+}
+
+double VrobotRoute::calculate_angle_between_segments(
+  const vrobot_route::v_edge_t &current_segment,
+  const vrobot_route::v_edge_t &next_segment) {
+  double current_end_angle, next_start_angle;
+
+  // Tính góc cuối của segment hiện tại
+  if (current_segment.type_ == vrobot_route::v_link_type_t::CURVE) {
+    current_end_angle = get_curve_end_angle(current_segment);
+  } else {
+    current_end_angle = get_straight_segment_angle(current_segment);
+  }
+
+  // Tính góc đầu của segment tiếp theo
+  if (next_segment.type_ == vrobot_route::v_link_type_t::CURVE) {
+    next_start_angle = get_curve_start_angle(next_segment);
+  } else {
+    next_start_angle = get_straight_segment_angle(next_segment);
+  }
+
+  // Tính góc chênh lệch và normalize về [-π, π]
+  double angle_diff = next_start_angle - current_end_angle;
+  while (angle_diff > M_PI) {
+    angle_diff -= 2 * M_PI;
+  }
+  while (angle_diff < -M_PI) {
+    angle_diff += 2 * M_PI;
+  }
+
+  // QUAN TRỌNG: Tính góc rẽ thực tế thay vì góc chênh lệch
+  // Góc rẽ = π - |angle_diff| để có:
+  // - Góc tù (đi thẳng) → góc rẽ nhỏ
+  // - Góc nhọn (rẽ gấp) → góc rẽ lớn
+  double turning_angle = M_PI - std::abs(angle_diff);
+
+  RCLCPP_DEBUG(
+    get_logger(),
+    "Angle diff: %.2f rad (%.1f deg), Turning angle: %.2f rad (%.1f deg)",
+    angle_diff,
+    angle_diff * 180.0 / M_PI,
+    turning_angle,
+    turning_angle * 180.0 / M_PI);
+
+  return turning_angle;
+}
+
+std::vector<std::vector<vrobot_route::v_edge_t>> VrobotRoute::
+  subdivide_sharp_turns(
+    const std::vector<vrobot_route::v_edge_t> &path_segments,
+    double                                     max_angle_threshold) {
+  if (path_segments.size() <= 1) {
+    return {path_segments};  // Return single sub-path
+  }
+
+  std::vector<std::vector<vrobot_route::v_edge_t>> subdivided_paths;
+  std::vector<vrobot_route::v_edge_t>              current_subpath;
+
+  for (size_t i = 0; i < path_segments.size(); ++i) {
+    current_subpath.push_back(path_segments[i]);
+
+    // Kiểm tra góc với segment tiếp theo (nếu có)
+    if (i < path_segments.size() - 1) {
+      double turning_angle =
+        calculate_angle_between_segments(path_segments[i],
+                                         path_segments[i + 1]);
+
+      // Nếu góc rẽ quá gấp, tách thành sub-path riêng
+      if (turning_angle < max_angle_threshold) {
+        RCLCPP_INFO(get_logger(),
+                    "Sharp turn detected: %.2f rad (%.1f deg) between segments "
+                    "%zu and %zu",
+                    turning_angle,
+                    turning_angle * 180.0 / M_PI,
+                    i,
+                    i + 1);
+
+        // Kết thúc sub-path hiện tại
+        subdivided_paths.push_back(current_subpath);
+        current_subpath.clear();
+      }
+    }
+  }
+
+  // Thêm sub-path cuối cùng nếu còn segments
+  if (!current_subpath.empty()) {
+    subdivided_paths.push_back(current_subpath);
+  }
+
+  RCLCPP_INFO(get_logger(),
+              "Path subdivided from %zu segments into %zu sub-paths",
+              path_segments.size(),
+              subdivided_paths.size());
+
+  return subdivided_paths;
+}
+
 }  // namespace vrobot_route
 
 int main(int argc, char *argv[]) {
@@ -157,24 +308,42 @@ int main(int argc, char *argv[]) {
   // Node ros2
   auto node = std::make_shared<vrobot_route::VrobotRoute>();
 
-  auto path = node->test(Eigen::Vector2d(1.0, 0.3), 8, "mapmoi");
+  auto path = node->getPath(Eigen::Vector2d(0.5, -0.2), 7, "mapmoi");
 
   if (path.totalDistance.has_value()) {
+    std::cout << "Original path:" << std::endl;
     for (const auto &segment : path.pathSegments) {
       std::cout << "\t- Segment: " << segment.id_ << "\t"
                 << "Start: " << segment.start_node_.id_ << "\t"
                 << "End: " << segment.end_node_.id_ << "\t"
-                << "Length: " << segment.length_ << std::endl;
+                << "Length: " << segment.length_ << "\t"
+                << "Max velocity: " << segment.max_vel_ << " m/s" << std::endl;
     }
 
-    auto nav_path = node->toPath(path.pathSegments, "map", node->now(), 0.01);
+    // Apply sharp turn subdivision
+    auto subdivided_paths = node->subdivide_sharp_turns(path.pathSegments);
 
-    std::cout << "Publishing path with " << nav_path.poses.size() << " poses"
-              << std::endl;
-    node->publish_path(nav_path);
-    std::cout << "\t- Distance: " << path.totalDistance.value() << std::endl;
-    std::cout << "\t- Algorithm used: " << path.algorithmUsed << std::endl;
-    std::cout << "\t- Path length: " << path.pathSegments.size() << std::endl;
+    std::cout << "\nSubdivided paths:" << std::endl;
+    for (size_t i = 0; i < subdivided_paths.size(); ++i) {
+      std::cout << "Sub-path " << i << ":" << std::endl;
+      for (const auto &segment : subdivided_paths[i]) {
+        std::cout << "\t- Segment: " << segment.id_ << "\t"
+                  << "Start: " << segment.start_node_.id_ << "\t"
+                  << "End: " << segment.end_node_.id_ << "\t"
+                  << "Length: " << segment.length_ << "\t"
+                  << "Max velocity: " << segment.max_vel_ << " m/s"
+                  << std::endl;
+      }
+    }
+
+    for (const auto &subpath : subdivided_paths) {
+      auto nav_path = node->toPath(subpath, "map", node->now(), 0.01);
+      node->publish_path(nav_path);
+      std::cout << "Publishing path with " << nav_path.poses.size() << " poses"
+                << std::endl;
+      std::this_thread::sleep_for(std::chrono::seconds(4));
+    }
+
   } else {
     std::cout << "No path found!" << std::endl;
   }

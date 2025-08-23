@@ -50,20 +50,17 @@ GraphPose::PlanningResult GraphPose::planPath(
     }
   }
 
-  // Use advanced link-based approach
+  // Use greedy strategy: evaluate 4 closest links within tolerance, choose shortest total path
   auto [linkPath, linkDistance] =
-    this->dijkstra_with_modular_link_approach(startPose,
-                                              targetNode,
-                                              config.directThreshold,
-                                              config.maxLinks,
-                                              config.linkDistanceWeight,
-                                              config.maxLinkDistance,
-                                              config.graphDistanceWeight);
+    this->dijkstra_with_greedy_strategy(startPose,
+                                        targetNode,
+                                        config.maxLinkDistance,  // Use as tolerance
+                                        4);  // Evaluate 4 closest links
 
   if (linkDistance) {
     result.pathSegments                  = linkPath;
     result.totalDistance                 = linkDistance;
-    result.algorithmUsed                 = "MODULAR_LINK_BASED";
+    result.algorithmUsed                 = "GREEDY_STRATEGY";
     result.success                       = true;
     result.metadata["link_weight"]       = config.linkDistanceWeight;
     result.metadata["max_link_distance"] = config.maxLinkDistance;

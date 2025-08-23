@@ -37,9 +37,19 @@ Eigen::Vector2d GeometricUtils::get_projection_point_on_line_segment(
   const Eigen::Vector2d &query_pose,
   const v_node_t        &nodeA,
   const v_node_t        &nodeB) const {
-  Eigen::Vector2d line_dir = (nodeB.pose_ - nodeA.pose_).normalized();
-  double          t        = (query_pose - nodeA.pose_).dot(line_dir);
-  return nodeA.pose_ + t * line_dir;
+  Eigen::Vector2d line_vector = nodeB.pose_ - nodeA.pose_;
+  double segment_length_sq = line_vector.squaredNorm();
+  
+  if (segment_length_sq < 1e-8) {
+    // Degenerate case: nodeA and nodeB are the same point
+    return nodeA.pose_;
+  }
+  
+  // Project onto line and clamp t to [0,1] for line segment
+  double t = (query_pose - nodeA.pose_).dot(line_vector) / segment_length_sq;
+  t = std::clamp(t, 0.0, 1.0);  // Clamp to line segment bounds
+  
+  return nodeA.pose_ + t * line_vector;
 }
 
 double GeometricUtils::get_distance_to_curve(const Eigen::Vector2d &query_pose,
@@ -171,15 +181,15 @@ std::vector<std::tuple<v_node_t, v_node_t, double>> GeometricUtils::
         if (pair.second.type_ == v_link_type_t::CURVE) {
           dist = get_distance_to_curve(query_pose, pair.second);
         } else {
-          // STRAIGHT hoặc default
+          // STRAIGHT hoặc default - sử dụng start_node và end_node của edge
           dist = get_distance_to_line_segment(query_pose,
-                                              pair.first,
-                                              pair.second.start_node_);
+                                              pair.second.start_node_,
+                                              pair.second.end_node_);
         }
 
         if (dist <= max_distance) {
           closest_links.push_back(
-            std::make_tuple(pair.first, pair.second.start_node_, dist));
+            std::make_tuple(pair.second.start_node_, pair.second.end_node_, dist));
         }
       }
     }
@@ -201,18 +211,27 @@ double GeometricUtils::get_distance_to_line_segment(
   const Eigen::Vector2d &point,
   const Eigen::Vector2d &line_start,
   const Eigen::Vector2d &line_end) const {
-  Eigen::Vector2d line_dir = (line_end - line_start).normalized();
-  double          t        = (point - line_start).dot(line_dir);
-  return (point - (line_start + t * line_dir)).norm();
+  return (point - get_projection_point_on_line_segment(point, line_start, line_end)).norm();
 }
 
 Eigen::Vector2d GeometricUtils::get_projection_point_on_line_segment(
   const Eigen::Vector2d &point,
   const Eigen::Vector2d &line_start,
   const Eigen::Vector2d &line_end) const {
-  Eigen::Vector2d line_dir = (line_end - line_start).normalized();
-  double          t        = (point - line_start).dot(line_dir);
-  return line_start + t * line_dir;
+  Eigen::Vector2d line_vector = line_end - line_start;
+  double segment_length_sq = line_vector.squaredNorm();
+  
+  if (segment_length_sq < 1e-8) {
+    // Degenerate case: start and end are the same point
+    return line_start;
+  }
+  
+  // Project onto line and clamp t to [0,1] for line segment
+  double t = (point - line_start).dot(line_vector) / segment_length_sq;
+  t = std::clamp(t, 0.0, 1.0);  // Clamp to line segment bounds
+  
+  return line_start + t * line_vector;
 }
+
 
 }  // namespace vrobot_route

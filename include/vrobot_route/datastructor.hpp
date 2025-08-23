@@ -43,6 +43,11 @@ typedef struct VEdge {
   double                       length_;
   double                       width_;
   double                       max_vel_;
+  
+  // Thêm fields cho partial curve
+  double curve_start_param_ = 0.0;  // Parameter t bắt đầu trên curve [0,1], default 0
+  double curve_end_param_   = 1.0;  // Parameter t kết thúc trên curve [0,1], default 1
+  bool   is_partial_curve_  = false; // Flag để đánh dấu đây là partial curve
 
   using Ptr = std::shared_ptr<VEdge>;
 } v_edge_t;
@@ -74,6 +79,9 @@ inline v_edge_t create_virtual_edge(const Eigen::Vector2d &start_pose,
 
   return edge;
 }
+
+// Helper function không còn cần thiết vì giờ chúng ta preserve original edge
+// và chỉ thêm metadata về parameters để rendering system xử lý
 
 // Hash function for VNode
 struct VNodeHash {

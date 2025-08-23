@@ -5,6 +5,7 @@
 #include <nav_msgs/msg/path.hpp>
 
 #include <vrobot_route/vrobot_route.hpp>
+#include <vrobot_route/benzier.hpp>
 
 namespace vrobot_route {
 
@@ -80,9 +81,32 @@ bool VrobotRoute::update_graph(std::string map_name) {
       vedge.start_node_ = vnodes_map[curvelink.getValueOfIdStart()];
       vedge.end_node_   = vnodes_map[curvelink.getValueOfIdEnd()];
       vedge.type_       = vrobot_route::v_link_type_t::CURVE;
-      vedge.length_     = (vnodes_map[curvelink.getValueOfIdStart()].pose_ -
-                       vnodes_map[curvelink.getValueOfIdEnd()].pose_)
-                        .norm();
+      // Tính length thực của curve thay vì khoảng cách thẳng
+      bezier::Bezier<3> bezierCurve(
+        {bezier::Point(vnodes_map[curvelink.getValueOfIdStart()].pose_.x(),
+                       vnodes_map[curvelink.getValueOfIdStart()].pose_.y()),
+         bezier::Point(curvelink.getValueOfControlPoint1X(),
+                       curvelink.getValueOfControlPoint1Y()),
+         bezier::Point(curvelink.getValueOfControlPoint2X(),
+                       curvelink.getValueOfControlPoint2Y()),
+         bezier::Point(vnodes_map[curvelink.getValueOfIdEnd()].pose_.x(),
+                       vnodes_map[curvelink.getValueOfIdEnd()].pose_.y())});
+      
+      // Tính arc length bằng cách sample curve
+      double arcLength = 0.0;
+      const int samples = 100;
+      bezier::Point prevPoint = bezierCurve.valueAt(0.0);
+      
+      for (int i = 1; i <= samples; ++i) {
+        double t = static_cast<double>(i) / samples;
+        bezier::Point currentPoint = bezierCurve.valueAt(t);
+        double dx = currentPoint.x - prevPoint.x;
+        double dy = currentPoint.y - prevPoint.y;
+        arcLength += std::sqrt(dx * dx + dy * dy);
+        prevPoint = currentPoint;
+      }
+      
+      vedge.length_ = arcLength;
 
       vedge.control_points_.push_back(
         Eigen::Vector2d(curvelink.getValueOfControlPoint1X(),
@@ -157,7 +181,7 @@ int main(int argc, char *argv[]) {
   // Node ros2
   auto node = std::make_shared<vrobot_route::VrobotRoute>();
 
-  auto path = node->test(Eigen::Vector2d(1.0, 0.3), 8, "mapmoi");
+  auto path = node->test(Eigen::Vector2d(0.5, -0.2), 8, "mapmoi");
 
   if (path.totalDistance.has_value()) {
     for (const auto &segment : path.pathSegments) {
